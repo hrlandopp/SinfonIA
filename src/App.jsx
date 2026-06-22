@@ -989,7 +989,6 @@ export default function App() {
                         style={{
                           flex: 1,
                           minWidth: '45px',
-                          borderRight: '1px solid rgba(255,255,255,0.03)',
                           backgroundColor: isPlayingInst 
                             ? (isPlayhead ? 'rgba(37, 99, 235, 0.4)' : 'rgba(37, 99, 235, 0.15)')
                             : 'transparent',
@@ -1019,7 +1018,6 @@ export default function App() {
                         style={{
                           flex: 1,
                           minWidth: '45px',
-                          borderRight: '1px solid rgba(255,255,255,0.03)',
                           backgroundColor: isPlayingInst 
                             ? (isPlayhead ? 'rgba(168, 85, 247, 0.4)' : 'rgba(168, 85, 247, 0.15)')
                             : 'transparent',
@@ -1049,7 +1047,6 @@ export default function App() {
                         style={{
                           flex: 1,
                           minWidth: '45px',
-                          borderRight: '1px solid rgba(255,255,255,0.03)',
                           backgroundColor: isPlayingInst 
                             ? (isPlayhead ? 'rgba(217, 119, 6, 0.4)' : 'rgba(217, 119, 6, 0.12)')
                             : 'transparent',
@@ -1079,7 +1076,6 @@ export default function App() {
                         style={{
                           flex: 1,
                           minWidth: '45px',
-                          borderRight: '1px solid rgba(255,255,255,0.03)',
                           backgroundColor: isPlayingInst 
                             ? (isPlayhead ? 'rgba(16, 185, 129, 0.4)' : 'rgba(16, 185, 129, 0.15)')
                             : 'transparent',

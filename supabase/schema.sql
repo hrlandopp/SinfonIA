@@ -10,6 +10,7 @@ CREATE TABLE IF NOT EXISTS projects (
     time_signature TEXT DEFAULT '4/4',
     capo_position INTEGER DEFAULT 0, -- Posición del capotraste (0 = sin capo)
     mood TEXT DEFAULT 'Neutral',
+    cover_art TEXT, -- Guardará la imagen de portada generada por la IA (Data URI Base64)
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
