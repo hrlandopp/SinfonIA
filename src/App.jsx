@@ -94,7 +94,50 @@ export default function App() {
   const [geminiKey, setGeminiKey] = useState(localStorage.getItem('gemini_api_key') || '')
   const [dbStatus, setDbStatus] = useState('Modo Local')
   
+  const [geminiTestResult, setGeminiTestResult] = useState('')
+  const [isTestingGemini, setIsTestingGemini] = useState(false)
+  
   const chatEndRef = useRef(null)
+
+  // Función de diagnóstico de la clave de Gemini
+  const testGeminiConnection = async () => {
+    if (!geminiKey || !geminiKey.trim()) {
+      setGeminiTestResult('⚠️ Por favor ingresa una clave antes de probar.')
+      return
+    }
+
+    setIsTestingGemini(true)
+    setGeminiTestResult('Probando conexión con Google Generative AI API...')
+
+    try {
+      const response = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models?key=${geminiKey.trim()}`
+      )
+      
+      const data = await response.json()
+      
+      if (!response.ok) {
+        throw new Error(data.error?.message || `HTTP ${response.status}: ${response.statusText}`)
+      }
+
+      if (data.models && Array.isArray(data.models)) {
+        const geminiModels = data.models.filter(m => m.name.includes('gemini'))
+        if (geminiModels.length > 0) {
+          const modelNames = geminiModels.map(m => m.name.replace('models/', '')).slice(0, 4).join(', ')
+          setGeminiTestResult(`✅ Conexión exitosa. Tu API key es válida. Modelos disponibles: ${modelNames}...`)
+        } else {
+          setGeminiTestResult('✅ Conexión exitosa, pero no se listaron modelos de Gemini para esta clave.')
+        }
+      } else {
+        setGeminiTestResult('✅ Conexión exitosa, pero la respuesta no contiene la estructura de modelos esperada.')
+      }
+    } catch (err) {
+      console.error(err)
+      setGeminiTestResult(`❌ Error de conexión: ${err.message}`)
+    } finally {
+      setIsTestingGemini(false)
+    }
+  }
 
   // Cargar lista de proyectos al iniciar
   useEffect(() => {
@@ -803,17 +846,41 @@ export default function App() {
               <form onSubmit={handleSaveSettings} style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
                 <div className="form-group">
                   <label className="form-label" htmlFor="gemini-key-dashboard">Google Gemini API Key (AI Studio)</label>
-                  <input 
-                    id="gemini-key-dashboard"
-                    type="password" 
-                    placeholder="AIzaSy..." 
-                    value={geminiKey} 
-                    onChange={(e) => setGeminiKey(e.target.value)}
-                    className="chat-input"
-                  />
+                  <div style={{ display: 'flex', gap: '0.5rem' }}>
+                    <input 
+                      id="gemini-key-dashboard"
+                      type="password" 
+                      placeholder="AIzaSy..." 
+                      value={geminiKey} 
+                      onChange={(e) => setGeminiKey(e.target.value)}
+                      className="chat-input"
+                    />
+                    <button 
+                      type="button" 
+                      onClick={testGeminiConnection}
+                      className="btn-flat"
+                      disabled={isTestingGemini}
+                      style={{ padding: '0.5rem 0.8rem', fontSize: '0.75rem', whiteSpace: 'nowrap' }}
+                    >
+                      {isTestingGemini ? 'Probando...' : 'Probar Clave'}
+                    </button>
+                  </div>
                   <span style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>
                     Requerido para conversar con tu productor musical de IA. Consigue una gratis en <a href="https://aistudio.google.com/" target="_blank" rel="noreferrer" style={{ color: 'var(--accent-blue)' }}>Google AI Studio</a>.
                   </span>
+                  {geminiTestResult && (
+                    <div style={{ 
+                      fontSize: '0.75rem', 
+                      marginTop: '0.5rem', 
+                      padding: '0.5rem', 
+                      backgroundColor: geminiTestResult.includes('✅') ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)', 
+                      border: geminiTestResult.includes('✅') ? '1px solid var(--accent-green)' : '1px solid var(--accent-red)', 
+                      color: geminiTestResult.includes('✅') ? '#a7f3d0' : '#fca5a5',
+                      borderRadius: 'var(--radius-sm)'
+                    }}>
+                      {geminiTestResult}
+                    </div>
+                  )}
                 </div>
 
                 <div style={{ borderBottom: '1px dashed var(--border-color)' }} />
