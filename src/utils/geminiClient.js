@@ -77,7 +77,7 @@ ${JSON.stringify(projectState, null, 2)}
 
   try {
     const response = await ai.models.generateContent({
-      model: 'gemini-3.5-flash',
+      model: 'gemini-2.5-flash',
       contents: contents,
       config: {
         systemInstruction: systemInstructionText,
@@ -109,7 +109,7 @@ Devuelve tus consejos en un formato legible, claro y motivador en español.`
 
   try {
     const response = await ai.models.generateContent({
-      model: 'gemini-3.1-pro',
+      model: 'gemini-2.5-pro',
       contents: prompt
     })
     return response.text

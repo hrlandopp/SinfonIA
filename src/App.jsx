@@ -707,6 +707,170 @@ export default function App() {
 
   const activeSection = sections.find(s => s.id === activeSectionId)
 
+  // --- Controles de Audio ---
+  const handleStop = () => {
+    audioEngine.stop()
+    setIsPlaying(false)
+    setCurrentBeat(0)
+    setCurrentChordIndex(0)
+    setCurrentChordName('')
+  }
+
+  const handlePlayToggle = async () => {
+    if (isPlaying) {
+      audioEngine.stop()
+      setIsPlaying(false)
+    } else {
+      try {
+        await audioEngine.startContext()
+        audioEngine.play()
+        setIsPlaying(true)
+      } catch (e) {
+        console.error('Error al iniciar audio:', e)
+        alert('No se pudo iniciar el audio. Intenta hacer clic en la página primero.')
+      }
+    }
+  }
+
+  const playFretNote = async (note) => {
+    try {
+      await audioEngine.startContext()
+      // Reproduce una nota individual usando el sintetizador de guitarra
+      if (audioEngine.guitar) {
+        audioEngine.guitar.triggerAttackRelease(note, '4n')
+      }
+    } catch (e) {
+      console.error('Error al reproducir nota:', e)
+    }
+  }
+
+  // --- Chat con IA ---
+  const handleSendChatMessage = async (e) => {
+    e.preventDefault()
+    if (!chatInput.trim() || isLoadingAi) return
+
+    if (!isGeminiConfigured()) {
+      alert('Por favor configura tu Gemini API Key en Ajustes de API primero.')
+      return
+    }
+
+    const userMsg = { id: `msg-${Date.now()}`, sender: 'user', message: chatInput.trim() }
+    const updatedHistory = [...chatHistory, userMsg]
+    setChatHistory(updatedHistory)
+    setChatInput('')
+    setIsLoadingAi(true)
+
+    try {
+      const projectState = {
+        name: project.name,
+        key_signature: project.key_signature,
+        tempo_bpm: project.tempo_bpm,
+        capo_position: project.capo_position,
+        mood: project.mood,
+        sections: sections.map(s => ({ name: s.name, chords: s.chords }))
+      }
+
+      const aiResponse = await sendMessageToProducerAI(userMsg.message, updatedHistory, projectState)
+      
+      const assistantMsg = {
+        id: `msg-${Date.now()}-ai`,
+        sender: 'assistant',
+        message: aiResponse.message || 'Sin respuesta del productor.'
+      }
+
+      // Aplicar cambios estructurales si los hay
+      let updatedProject = { ...project }
+      let updatedSections = [...sections]
+      const changes = aiResponse.changes
+
+      if (changes && Object.keys(changes).length > 0) {
+        if (changes.tempo_bpm) {
+          updatedProject = { ...updatedProject, tempo_bpm: changes.tempo_bpm }
+          audioEngine.setBpm(changes.tempo_bpm)
+        }
+        if (changes.key_signature) {
+          updatedProject = { ...updatedProject, key_signature: changes.key_signature }
+        }
+        if (typeof changes.capo_position === 'number') {
+          updatedProject = { ...updatedProject, capo_position: changes.capo_position }
+        }
+        if (changes.sections && Array.isArray(changes.sections) && changes.sections.length > 0) {
+          updatedSections = changes.sections.map((sec, idx) => ({
+            id: sections[idx]?.id || `sec-ai-${Date.now()}-${idx}`,
+            name: sec.name,
+            order_index: sec.order_index ?? idx,
+            chords: sec.chords || [],
+            accompaniment: sections[idx]?.accompaniment || { piano: 'arpeggio', bass: 'roots', drums: 'basic' }
+          }))
+        }
+
+        setProject(updatedProject)
+        setSections(updatedSections)
+        if (updatedSections.length > 0 && !updatedSections.find(s => s.id === activeSectionId)) {
+          setActiveSectionId(updatedSections[0].id)
+        }
+
+        const changeLog = {
+          id: `msg-${Date.now()}-log`,
+          sender: 'system',
+          message: `[Cambios aplicados: ${[
+            changes.tempo_bpm ? `BPM → ${changes.tempo_bpm}` : '',
+            changes.key_signature ? `Tono → ${changes.key_signature}` : '',
+            typeof changes.capo_position === 'number' ? `Capo → ${changes.capo_position}` : '',
+            changes.sections ? `${changes.sections.length} sección(es) actualizadas` : ''
+          ].filter(Boolean).join(', ')}]`
+        }
+        const finalHistory = [...updatedHistory, assistantMsg, changeLog]
+        setChatHistory(finalHistory)
+        saveCurrentState(updatedProject, updatedSections)
+        if (isCloudActive) {
+          try {
+            await supabase.from('chat_history').insert([{
+              project_id: project.id,
+              sender: 'user',
+              message: userMsg.message
+            }, {
+              project_id: project.id,
+              sender: 'assistant',
+              message: assistantMsg.message
+            }])
+          } catch (_) {}
+        } else {
+          localStorage.setItem(`local_chat_${project.id}`, JSON.stringify(finalHistory))
+        }
+      } else {
+        const finalHistory = [...updatedHistory, assistantMsg]
+        setChatHistory(finalHistory)
+        if (!isCloudActive) {
+          localStorage.setItem(`local_chat_${project.id}`, JSON.stringify(finalHistory))
+        }
+      }
+    } catch (err) {
+      console.error('Error en chat de IA:', err)
+      setChatHistory(prev => [...prev, {
+        id: `msg-${Date.now()}-err`,
+        sender: 'assistant',
+        message: `Hubo un error de conexión: ${err.message}`
+      }])
+    } finally {
+      setIsLoadingAi(false)
+    }
+  }
+
+  // --- Guardar ajustes de API ---
+  const handleSaveSettings = (e) => {
+    e.preventDefault()
+    if (geminiKey.trim()) {
+      localStorage.setItem('gemini_api_key', geminiKey.trim())
+    }
+    if (supabaseUrl.trim() && supabaseKey.trim()) {
+      saveSupabaseCredentials(supabaseUrl.trim(), supabaseKey.trim())
+    } else {
+      // Solo guardar Gemini, recargar para que lo tome
+      window.location.reload()
+    }
+  }
+
   // --- RENDERIZADO VISTA 1: DASHBOARD ---
   if (currentView === 'dashboard') {
     return (
