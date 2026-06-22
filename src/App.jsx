@@ -21,7 +21,7 @@ export default function App() {
         fontWeight: '800',
         background: 'linear-gradient(135deg, #06b6d4 0%, #6366f1 50%, #a855f7 100%)',
         WebkitBackgroundClip: 'text',
-        WebkitTextFill-color: 'transparent',
+        WebkitTextFillColor: 'transparent',
         margin: '10px 0'
       }}>
         SinfonIA
