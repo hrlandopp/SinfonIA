@@ -22,8 +22,8 @@ const INITIAL_PROJECTS = [
 ]
 
 const DEFAULT_SECTIONS = [
-  { id: 'sec-intro', name: 'Intro', order_index: 0, chords: [{ chord: 'Am', beats: 4 }, { chord: 'F', beats: 4 }, { chord: 'C', beats: 4 }, { chord: 'G', beats: 4 }], accompaniment: { piano: 'arpeggio', bass: 'roots', drums: 'basic' } },
-  { id: 'sec-verso', name: 'Verso', order_index: 1, chords: [{ chord: 'Am', beats: 4 }, { chord: 'Dm', beats: 4 }, { chord: 'G',  beats: 4 }, { chord: 'C', beats: 4 }], accompaniment: { piano: 'arpeggio', bass: 'roots', drums: 'basic' } },
+  { id: 'sec-intro', name: 'Intro', order_index: 0, chords: [{ chord: 'Am', beats: 4 }, { chord: 'F', beats: 4 }, { chord: 'C', beats: 4 }, { chord: 'G', beats: 4 }], accompaniment: { guitar: 'strum', piano: 'arpeggio', bass: 'roots', drums: 'basic', strings: 'pad', violin: 'melody', vibraphone: 'chords' } },
+  { id: 'sec-verso', name: 'Verso', order_index: 1, chords: [{ chord: 'Am', beats: 4 }, { chord: 'Dm', beats: 4 }, { chord: 'G',  beats: 4 }, { chord: 'C', beats: 4 }], accompaniment: { guitar: 'strum', piano: 'arpeggio', bass: 'roots', drums: 'basic', strings: 'pad', violin: 'melody', vibraphone: 'chords' } },
 ]
 
 export default function App() {
@@ -45,10 +45,13 @@ export default function App() {
   const [isAnalysisOpen, setIsAnalysisOpen] = useState(false)
   const [isGeneratingArt,setIsGeneratingArt]= useState(false)
   const [instruments,    setInstruments]    = useState({
-    guitar: { active: true, volume: -6,  type: 'strum' },
-    piano:  { active: true, volume: -12, type: 'arpeggio' },
-    bass:   { active: true, volume: -10, type: 'roots' },
+    guitar: { active: true, volume: -14, type: 'strum' },
+    piano:  { active: true, volume: -18, type: 'arpeggio' },
+    bass:   { active: true, volume: -16, type: 'roots' },
     drums:  { active: true, volume: -12, type: 'basic' },
+    strings: { active: false, volume: -20, type: 'pad' },
+    violin: { active: false, volume: -18, type: 'melody' },
+    vibraphone: { active: false, volume: -16, type: 'chords' }
   })
   const [supabaseUrl,    setSupabaseUrl]    = useState(localStorage.getItem('supabase_url') || '')
   const [supabaseKey,    setSupabaseKey]    = useState(localStorage.getItem('supabase_anon_key') || '')
@@ -81,7 +84,10 @@ export default function App() {
     if (!sec) return
     audioEngine.setChords(sec.chords || [])
     setTotalBeats(sec.chords.reduce((a, c) => a + (c.beats || 4), 0))
-    if (sec.accompaniment) Object.keys(sec.accompaniment).forEach(k => audioEngine.setPatternType(k, sec.accompaniment[k]))
+    if (sec.accompaniment) Object.keys(sec.accompaniment).forEach(k => {
+      audioEngine.setPatternType(k, sec.accompaniment[k])
+      setInstruments(p => ({...p, [k]: {...p[k], type: sec.accompaniment[k]}}))
+    })
   }, [sections, activeSectionId])
 
   useEffect(() => {
@@ -224,7 +230,7 @@ export default function App() {
     const userMsg={id:`u-${Date.now()}`,sender:'user',message:chatInput.trim()}
     const hist=[...chatHistory,userMsg]; setChatHistory(hist); setChatInput(''); setIsLoadingAi(true)
     try {
-      const ps={name:project.name,key_signature:project.key_signature,tempo_bpm:project.tempo_bpm,capo_position:project.capo_position,mood:project.mood,sections:sections.map(s=>({name:s.name,chords:s.chords}))}
+      const ps={name:project.name,key_signature:project.key_signature,tempo_bpm:project.tempo_bpm,capo_position:project.capo_position,mood:project.mood,instruments,sections:sections.map(s=>({name:s.name,chords:s.chords}))}
       const ai=await sendMessageToProducerAI(userMsg.message,hist,ps)
       const aMsg={id:`a-${Date.now()}`,sender:'assistant',message:ai.message||'Sin respuesta.'}
       let uProj={...project},uSecs=[...sections]; const ch=ai.changes
@@ -232,7 +238,17 @@ export default function App() {
         if(ch.tempo_bpm){uProj={...uProj,tempo_bpm:ch.tempo_bpm};audioEngine.setBpm(ch.tempo_bpm)}
         if(ch.key_signature)uProj={...uProj,key_signature:ch.key_signature}
         if(typeof ch.capo_position==='number')uProj={...uProj,capo_position:ch.capo_position}
-        if(ch.sections?.length){uSecs=ch.sections.map((s,i)=>({id:sections[i]?.id||`sec-ai-${Date.now()}-${i}`,name:s.name,order_index:s.order_index??i,chords:s.chords||[],accompaniment:sections[i]?.accompaniment||{piano:'arpeggio',bass:'roots',drums:'basic'}}))}
+        if(ch.mood)uProj={...uProj,mood:ch.mood}
+        if(ch.instruments){
+          Object.keys(ch.instruments).forEach(k => {
+            if(instruments[k]){
+              setInstruments(p=>({...p,[k]:{...p[k],...ch.instruments[k]}}))
+              if(ch.instruments[k].active !== undefined) audioEngine.setInstrumentActive(k, ch.instruments[k].active)
+              if(ch.instruments[k].type) audioEngine.setPatternType(k, ch.instruments[k].type)
+            }
+          })
+        }
+        if(ch.sections?.length){uSecs=ch.sections.map((s,i)=>({id:sections[i]?.id||`sec-ai-${Date.now()}-${i}`,name:s.name,order_index:s.order_index??i,chords:s.chords||[],accompaniment:sections[i]?.accompaniment||{guitar:'strum',piano:'arpeggio',bass:'roots',drums:'basic',strings:'pad',violin:'melody',vibraphone:'chords'}}))}
         setProject(uProj); setSections(uSecs)
         if(uSecs.length>0&&!uSecs.find(s=>s.id===activeSectionId)) setActiveSectionId(uSecs[0].id)
         const logParts=[ch.tempo_bpm&&`${ch.tempo_bpm} BPM`,ch.key_signature&&`Tono: ${ch.key_signature}`,ch.sections&&`${ch.sections.length} secciones`].filter(Boolean).join(' · ')
@@ -251,7 +267,7 @@ export default function App() {
     if(!isGeminiConfigured()){alert('Configura tu Gemini API Key primero.');return}
     setAnalysisResult('Analizando tu composición…'); setIsAnalysisOpen(true)
     try {
-      const result=await runDeepCompositionAnalysis({name:project.name,key_signature:project.key_signature,tempo_bpm:project.tempo_bpm,capo_position:project.capo_position,mood:project.mood,sections:sections.map(s=>({name:s.name,chords:s.chords}))})
+      const result=await runDeepCompositionAnalysis({name:project.name,key_signature:project.key_signature,tempo_bpm:project.tempo_bpm,capo_position:project.capo_position,mood:project.mood,instruments,sections:sections.map(s=>({name:s.name,chords:s.chords}))})
       setAnalysisResult(result)
     } catch(e){setAnalysisResult(`❌ ${e.message}`)}
   }
@@ -551,10 +567,13 @@ export default function App() {
 
             {/* Tracks */}
             {[
-              {key:'guitar',label:'Guitarra',cls:'trk-guitar',color:'var(--trk-guitar)',note:bi=>instruments.guitar.active&&(instruments.guitar.type==='strum'?bi%4===0:true)},
+              {key:'guitar',label:'Guitarra',cls:'trk-guitar',color:'var(--trk-guitar)',note:bi=>instruments.guitar.active},
               {key:'piano', label:'Piano',   cls:'trk-piano', color:'var(--trk-piano)', note:()=>instruments.piano.active},
-              {key:'bass',  label:'Bajo',    cls:'trk-bass',  color:'var(--trk-bass)',  note:bi=>instruments.bass.active&&(instruments.bass.type==='roots'?bi%2===0:true)},
+              {key:'bass',  label:'Bajo',    cls:'trk-bass',  color:'var(--trk-bass)',  note:bi=>instruments.bass.active},
               {key:'drums', label:'Batería', cls:'trk-drums', color:'var(--trk-drums)', note:()=>instruments.drums.active},
+              {key:'strings', label:'Cuerdas', cls:'trk-strings', color:'var(--trk-strings)', note:()=>instruments.strings.active},
+              {key:'violin', label:'Violín', cls:'trk-violin', color:'var(--trk-violin)', note:()=>instruments.violin.active},
+              {key:'vibraphone', label:'Vibráfono', cls:'trk-vibraphone', color:'var(--trk-vibraphone)', note:()=>instruments.vibraphone.active},
             ].map(({key,label,cls,color,note})=>(
               <div key={key} className={`daw-track ${cls}`}>
                 <div className="daw-track-label">
@@ -618,10 +637,13 @@ export default function App() {
         <div className="sidebar-section-title" style={{marginBottom:4}}>Mezcla</div>
 
         {[
-          {key:'guitar',label:'Guitarra',cls:'mixer-ch-guitar',color:'var(--trk-guitar)',patterns:[['strum','Rasgueo'],['arpeggio','Arpegio']]},
-          {key:'piano', label:'Piano',   cls:'mixer-ch-piano', color:'var(--trk-piano)', patterns:[['arpeggio','Arpegio'],['chord','Bloque']]},
-          {key:'bass',  label:'Bajo',    cls:'mixer-ch-bass',  color:'var(--trk-bass)',  patterns:[['roots','Tónicas'],['walking','Walking']]},
-          {key:'drums', label:'Batería', cls:'mixer-ch-drums', color:'var(--trk-drums)', patterns:[['basic','Base'],['metronome','Click']]},
+          {key:'guitar',label:'Guitarra',cls:'mixer-ch-guitar',color:'var(--trk-guitar)',patterns:[['strum','Strum'],['arpeggio','Arpegio'],['fingerpicking','Finger']]},
+          {key:'piano', label:'Piano',   cls:'mixer-ch-piano', color:'var(--trk-piano)', patterns:[['arpeggio','Arpegio'],['chord','Bloque'],['boogie','Boogie']]},
+          {key:'bass',  label:'Bajo',    cls:'mixer-ch-bass',  color:'var(--trk-bass)',  patterns:[['roots','Tónicas'],['walking','Walking'],['funk slap','Slap']]},
+          {key:'drums', label:'Batería', cls:'mixer-ch-drums', color:'var(--trk-drums)', patterns:[['basic','Base'],['shuffle','Shuffle'],['metronome','Click']]},
+          {key:'strings', label:'Cuerdas', cls:'mixer-ch-strings', color:'var(--trk-strings)', patterns:[['pad','Pad']]},
+          {key:'violin', label:'Violín', cls:'mixer-ch-violin', color:'var(--trk-violin)', patterns:[['melody','Melodía']]},
+          {key:'vibraphone', label:'Vibráfono', cls:'mixer-ch-vibraphone', color:'var(--trk-vibraphone)', patterns:[['chords','Acordes']]},
         ].map(({key,label,cls,color,patterns})=>(
           <div key={key} className={`mixer-channel ${cls}`}>
             <div className="mixer-channel-header">

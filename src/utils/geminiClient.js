@@ -21,8 +21,8 @@ export const sendMessageToProducerAI = async (userMessage, chatHistory, projectS
   const ai = getAiClient()
 
   const systemInstructionText = `
-Eres SinfonIA, un productor musical experto, compositor y guitarrista profesional.
-Ayudas al usuario a plasmar sentimientos en música, sugiriendo progresiones de acordes, tempos, tonalidades y estructuras.
+Eres SinfonIA, un productor musical experto, compositor y arreglista profesional.
+Ayudas al usuario a plasmar sentimientos en música, sugiriendo progresiones de acordes, tempos, tonalidades y controlando los instrumentos del estudio.
 
 Responde SIEMPRE en formato JSON con esta estructura exacta:
 {
@@ -31,6 +31,16 @@ Responde SIEMPRE en formato JSON con esta estructura exacta:
     "tempo_bpm": 120,
     "key_signature": "Am",
     "capo_position": 0,
+    "mood": "Melancólico",
+    "instruments": {
+      "guitar": { "active": true, "type": "fingerpicking" },
+      "piano": { "active": true, "type": "arpeggio" },
+      "bass": { "active": true, "type": "roots" },
+      "drums": { "active": true, "type": "basic" },
+      "strings": { "active": true, "type": "pad" },
+      "violin": { "active": false, "type": "melody" },
+      "vibraphone": { "active": false, "type": "chords" }
+    },
     "sections": [
       {
         "name": "Intro",
@@ -46,16 +56,29 @@ Responde SIEMPRE en formato JSON con esta estructura exacta:
   }
 }
 
-Si no hay cambios estructurales, devuelve "changes": null o {}.
+Patrones disponibles por instrumento:
+- guitar: strum, arpeggio, fingerpicking
+- piano: arpeggio, chord, boogie
+- bass: roots, walking, funk slap
+- drums: basic, metronome, shuffle
+- strings: pad
+- violin: melody
+- vibraphone: chords
+
+Si no hay cambios estructurales ni instrumentales, devuelve "changes": null o {}.
 Responde siempre en español.
 
 Estado actual del proyecto:
 ${JSON.stringify(projectState, null, 2)}
 `
 
+  // Incluir el historial completo para que la IA tenga memoria del proyecto
   const contents = chatHistory
-    .filter(m => m.sender === 'user' || m.sender === 'assistant')
-    .map(m => ({ role: m.sender === 'user' ? 'user' : 'model', parts: [{ text: m.message }] }))
+    .filter(m => m.sender === 'user' || m.sender === 'assistant' || m.sender === 'system')
+    .map(m => ({ 
+      role: m.sender === 'user' ? 'user' : 'model', 
+      parts: [{ text: m.message }] 
+    }))
 
   try {
     const response = await ai.models.generateContent({
@@ -70,7 +93,7 @@ ${JSON.stringify(projectState, null, 2)}
   }
 }
 
-// ─── 2. Análisis de Producción (gemini-2.5-flash — Pro no disponible en tier gratuito) ──
+// ─── 2. Análisis de Producción ──────────────────────────────────────────────
 export const runDeepCompositionAnalysis = async (projectState) => {
   const ai = getAiClient()
 
@@ -78,16 +101,15 @@ export const runDeepCompositionAnalysis = async (projectState) => {
 
 Analiza:
 1. 🎵 Progresión de acordes: coherencia, función armónica, tensión/resolución
-2. 🎸 Técnica de guitarra: posiciones recomendadas, uso del capo, arpegios sugeridos
+2. 🎸 Técnica de guitarra y arreglo general: uso del capo, arpegios, y cómo los demás instrumentos (bajo, piano, cuerdas, violín, vibráfono) interactúan con la guitarra.
 3. 🎭 Arco emocional: cómo evoluciona el sentimiento entre secciones
 4. 💡 Sugerencias específicas y accionables para mejorar la composición
 
-Estructura de la canción:
+Estructura de la canción e instrumentos activos:
 ${JSON.stringify(projectState, null, 2)}
 
 Responde en español con formato claro, usando emojis y secciones. Sé específico y motivador.`
 
-  // Intentar con flash (disponible en tier gratuito) para mayor disponibilidad
   const modelsToTry = ['gemini-2.5-flash', 'gemini-2.0-flash']
   let lastError = null
 
@@ -98,19 +120,15 @@ Responde en español con formato claro, usando emojis y secciones. Sé específi
     } catch (error) {
       console.warn(`Modelo ${model} falló:`, error.message)
       lastError = error
-      // Si es rate limit, esperar y reintentar con siguiente modelo
       if (error.message?.includes('429') || error.message?.includes('RESOURCE_EXHAUSTED')) continue
-      // Si es otro error, propagar inmediatamente
       throw new Error(`Error de análisis: ${error.message}`)
     }
   }
   throw new Error(`Cuota agotada. Intenta de nuevo en unos minutos. (${lastError?.message?.slice(0, 120)})`)
 }
 
-// ─── 3. Portada (generada con Canvas — Imagen API no disponible en tier gratuito) ───
+// ─── 3. Portada (generada con Canvas) ───────────────────────────────────────
 export const generateSongArt = async (songName, moodDescription) => {
-  // Imagen 3 no está disponible en el tier gratuito de la API.
-  // Generamos una portada SVG profesional usando el nombre y mood de la canción.
   return generateCanvasCover(songName, moodDescription)
 }
 
@@ -121,95 +139,64 @@ const generateCanvasCover = (songName, mood) => {
     canvas.height = 512
     const ctx = canvas.getContext('2d')
 
-    // Paleta basada en el mood
+    // Paleta minimalista y clara, evitando tonos muy oscuros
     const palettes = {
-      melancólico: ['#1a1a2e', '#16213e', '#0f3460', '#533483'],
-      melancolic:  ['#1a1a2e', '#16213e', '#0f3460', '#533483'],
-      energico:    ['#1a0a00', '#3d0000', '#870000', '#ff6b00'],
-      enérgico:    ['#1a0a00', '#3d0000', '#870000', '#ff6b00'],
-      neutral:     ['#0d1b2a', '#1b2838', '#2a3f5f', '#415a77'],
-      alegre:      ['#0d2137', '#0f4c75', '#1b6ca8', '#0097b2'],
-      romantico:   ['#1a0a10', '#3d0020', '#7a003f', '#c0005a'],
-      romántico:   ['#1a0a10', '#3d0020', '#7a003f', '#c0005a'],
+      melancólico: ['#e2e8f0', '#cbd5e1', '#94a3b8', '#64748b'],
+      melancolic:  ['#e2e8f0', '#cbd5e1', '#94a3b8', '#64748b'],
+      energico:    ['#ffedd5', '#fed7aa', '#f97316', '#ea580c'],
+      enérgico:    ['#ffedd5', '#fed7aa', '#f97316', '#ea580c'],
+      neutral:     ['#f8fafc', '#f1f5f9', '#e2e8f0', '#cbd5e1'],
+      alegre:      ['#e0f2fe', '#bae6fd', '#38bdf8', '#0284c7'],
+      romantico:   ['#fce7f3', '#fbcfe8', '#f472b6', '#db2777'],
+      romántico:   ['#fce7f3', '#fbcfe8', '#f472b6', '#db2777'],
     }
 
-    const moodKey = mood.toLowerCase().split(' ')[0]
+    const moodKey = mood?.toLowerCase().split(' ')[0] || 'neutral'
     const colors = palettes[moodKey] || palettes.neutral
 
-    // Fondo degradado
+    // Fondo degradado sutil
     const grad = ctx.createLinearGradient(0, 0, 512, 512)
     grad.addColorStop(0, colors[0])
-    grad.addColorStop(0.4, colors[1])
-    grad.addColorStop(0.7, colors[2])
-    grad.addColorStop(1, colors[3])
+    grad.addColorStop(1, colors[1])
     ctx.fillStyle = grad
     ctx.fillRect(0, 0, 512, 512)
 
-    // Círculo de luz central
-    const radGrad = ctx.createRadialGradient(256, 220, 20, 256, 220, 200)
-    radGrad.addColorStop(0, 'rgba(255,255,255,0.12)')
-    radGrad.addColorStop(1, 'rgba(0,0,0,0)')
-    ctx.fillStyle = radGrad
-    ctx.fillRect(0, 0, 512, 512)
-
-    // Líneas de onda decorativas
-    ctx.strokeStyle = 'rgba(255,255,255,0.08)'
-    ctx.lineWidth = 1
-    for (let i = 0; i < 6; i++) {
-      ctx.beginPath()
-      for (let x = 0; x <= 512; x += 4) {
-        const y = 256 + Math.sin((x / 512) * Math.PI * 3 + i) * (30 + i * 15)
-        i === 0 && x === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y)
-      }
-      ctx.stroke()
-    }
-
-    // Ícono de guitarra (simplificado)
-    ctx.fillStyle = 'rgba(255,255,255,0.15)'
+    // Formas minimalistas (círculos abstractos)
+    ctx.fillStyle = colors[2]
+    ctx.globalAlpha = 0.2
     ctx.beginPath()
-    ctx.arc(256, 200, 55, 0, Math.PI * 2)
+    ctx.arc(400, 100, 150, 0, Math.PI * 2)
     ctx.fill()
-    ctx.fillStyle = 'rgba(255,255,255,0.08)'
+    
+    ctx.fillStyle = colors[3]
+    ctx.globalAlpha = 0.1
     ctx.beginPath()
-    ctx.arc(256, 200, 75, 0, Math.PI * 2)
+    ctx.arc(100, 400, 200, 0, Math.PI * 2)
     ctx.fill()
+    
+    ctx.globalAlpha = 1.0
 
-    // 🎸 emoji
+    // 🎸 emoji o icono minimalista
     ctx.font = '64px serif'
     ctx.textAlign = 'center'
     ctx.fillText('🎸', 256, 222)
 
-    // Nombre de la canción
+    // Nombre de la canción (texto oscuro para contraste en fondo claro)
     const fontSize = songName.length > 16 ? 26 : songName.length > 10 ? 32 : 38
-    ctx.font = `bold ${fontSize}px "Inter", "Segoe UI", sans-serif`
-    ctx.fillStyle = 'rgba(255,255,255,0.95)'
-    ctx.shadowColor = 'rgba(0,0,0,0.8)'
-    ctx.shadowBlur = 10
+    ctx.font = \`bold \${fontSize}px "Inter", "Segoe UI", sans-serif\`
+    ctx.fillStyle = '#0f172a' // texto muy oscuro en lugar de blanco
     ctx.fillText(songName, 256, 335)
 
     // Mood / descripción
     ctx.font = '16px "Inter", "Segoe UI", sans-serif'
-    ctx.fillStyle = 'rgba(255,255,255,0.5)'
-    ctx.shadowBlur = 0
-    ctx.fillText(mood, 256, 370)
+    ctx.fillStyle = '#475569'
+    ctx.fillText(mood || 'Neutral', 256, 370)
 
     // SinfonIA label
     ctx.font = 'bold 11px "Inter", "Segoe UI", sans-serif'
-    ctx.fillStyle = 'rgba(255,255,255,0.3)'
+    ctx.fillStyle = '#94a3b8'
     ctx.letterSpacing = '0.1em'
     ctx.fillText('SINFONÍA STUDIO', 256, 460)
-
-    // Borde inferior decorativo
-    const lineGrad = ctx.createLinearGradient(100, 0, 412, 0)
-    lineGrad.addColorStop(0, 'transparent')
-    lineGrad.addColorStop(0.5, 'rgba(255,255,255,0.4)')
-    lineGrad.addColorStop(1, 'transparent')
-    ctx.strokeStyle = lineGrad
-    ctx.lineWidth = 1
-    ctx.beginPath()
-    ctx.moveTo(100, 445)
-    ctx.lineTo(412, 445)
-    ctx.stroke()
 
     // Convertir a base64
     const dataUrl = canvas.toDataURL('image/png')
