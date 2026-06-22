@@ -179,7 +179,17 @@ export default function App() {
     if (isPlaying) { audioEngine.stop(); setIsPlaying(false) }
     else { try { await audioEngine.startContext(); audioEngine.play(); setIsPlaying(true) } catch (e) { alert('Haz clic en la página primero para activar el audio.') } }
   }
-  const playFretNote = async (note) => { try { await audioEngine.startContext(); audioEngine.guitar?.triggerAttackRelease(note, '4n') } catch (e) { console.error(e) } }
+  const playFretNote = async (note) => { 
+    try { 
+      await audioEngine.startContext()
+      // Si hay un acorde activo, toca el acorde completo; si no, toca solo la nota
+      if (currentChord) {
+        audioEngine.playChord(currentChord, 0.6)
+      } else {
+        audioEngine.playNote(note, 0.5)
+      }
+    } catch (e) { console.error(e) } 
+  }
 
   const updateBpm = (v) => { const val = Math.min(240, Math.max(40, parseInt(v)||120)); const u={...project, tempo_bpm: val}; setProject(u); audioEngine.setBpm(val); saveState(u, sections) }
   const updateKey = (k) => { const u={...project, key_signature: k}; setProject(u); saveState(u, sections) }
@@ -597,6 +607,8 @@ export default function App() {
             activeChord={isPlaying?currentChord:(activeSection?.chords[0]?.chord||'')}
             capoPosition={project.capo_position}
             onPlayNote={playFretNote}
+            currentBeat={currentBeat}
+            isPlaying={isPlaying}
           />
         </div>
       </main>

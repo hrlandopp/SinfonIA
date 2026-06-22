@@ -170,7 +170,7 @@ class AudioEngine {
         release: 0.6
       }
     }).connect(this.guitarFilter)
-    this.guitar.volume.value = -6
+    this.guitar.volume.value = -14
 
     // 2. PIANO (Acompañamiento suave)
     this.pianoFilter = new Tone.Filter(1200, 'lowpass').toDestination()
@@ -183,7 +183,7 @@ class AudioEngine {
         release: 1.0
       }
     }).connect(this.pianoFilter)
-    this.piano.volume.value = -14
+    this.piano.volume.value = -18
 
     // 3. BAJO (Mono synth para bajo coherente)
     this.bassFilter = new Tone.Filter(250, 'lowpass').toDestination()
@@ -196,11 +196,11 @@ class AudioEngine {
         release: 0.5
       }
     }).connect(this.bassFilter)
-    this.bass.volume.value = -10
+    this.bass.volume.value = -16
 
     // 4. BATERÍA
     this.kick = new Tone.MembraneSynth().toDestination()
-    this.kick.volume.value = -8
+    this.kick.volume.value = -12
     
     this.hihat = new Tone.MetalSynth({
       envelope: {
@@ -209,7 +209,7 @@ class AudioEngine {
         release: 0.05
       }
     }).toDestination()
-    this.hihat.volume.value = -20
+    this.hihat.volume.value = -26
     
     this.snare = new Tone.NoiseSynth({
       noise: { type: 'white' },
@@ -219,14 +219,14 @@ class AudioEngine {
         sustain: 0
       }
     }).toDestination()
-    this.snare.volume.value = -14
+    this.snare.volume.value = -20
 
     // --- CONFIGURACIÓN DE INSTRUMENTOS ---
     this.instruments = {
-      guitar: { active: true, volume: -6, type: 'strum' },
-      piano: { active: true, volume: -14, type: 'arpeggio' },
-      bass: { active: true, volume: -10, type: 'roots' },
-      drums: { active: true, volume: -8, type: 'basic' }
+      guitar: { active: true, volume: -14, type: 'strum' },
+      piano: { active: true, volume: -18, type: 'arpeggio' },
+      bass: { active: true, volume: -16, type: 'roots' },
+      drums: { active: true, volume: -12, type: 'basic' }
     }
 
     // --- CALLBACKS ---
@@ -276,19 +276,29 @@ class AudioEngine {
   }
 
   /**
-   * Programa todos los eventos de audio con timing preciso
+   * Limpia todos los eventos programados y detiene la reproducción
+   */
+  clearSchedule() {
+    Tone.Transport.cancel()
+    this.beatSchedules = []
+  }
+
+  /**
+   * Programa todos los eventos de audio con timing preciso (UNA SOLA VEZ)
    */
   scheduleSequence() {
     if (this.currentChords.length === 0) return
 
+    // Limpiar eventos previos
+    this.clearSchedule()
+
     let cumulativeBeat = 0
     let chordIdx = 0
 
-    // Por cada acorde en la secuencia
+    // Por cada acorde en la secuencia (SOLO UNA ITERACIÓN)
     for (const chordObj of this.currentChords) {
       const chordName = chordObj.chord
       const durationBeats = chordObj.beats || 4
-      const beatDuration = this.beatToSeconds(durationBeats)
 
       // GUITARRA: rasgueo al inicio del acorde
       this.scheduleGuitar(chordName, cumulativeBeat, durationBeats, chordIdx)
@@ -306,7 +316,8 @@ class AudioEngine {
       const seconds = this.beatToSeconds(cumulativeBeat)
       Tone.Transport.scheduleOnce((time) => {
         if (this.onBeatCallback) {
-          this.onBeatCallback(cumulativeBeat, chordIdx, chordName, this.currentChords.length * 4)
+          const totalBeats = this.currentChords.reduce((sum, c) => sum + (c.beats || 4), 0)
+          this.onBeatCallback(cumulativeBeat, chordIdx, chordName, totalBeats)
         }
       }, '+' + seconds)
 
@@ -314,14 +325,18 @@ class AudioEngine {
       chordIdx++
     }
 
-    // Loop: volver a empezar
+    // LOOP CORRECTO: Reprogramar al final de la secuencia (no usar scheduleRepeat)
     const totalBeats = cumulativeBeat
     const loopSeconds = this.beatToSeconds(totalBeats)
-    Tone.Transport.scheduleRepeat((time) => {
-      this.currentBeat = 0
-      this.chordIndex = 0
-      this.scheduleSequence()
-    }, loopSeconds)
+
+    Tone.Transport.scheduleOnce(() => {
+      if (this.isPlaying) {
+        // Reiniciar la secuencia sin acumular eventos
+        this.currentBeat = 0
+        this.chordIndex = 0
+        this.scheduleSequence()
+      }
+    }, '+' + loopSeconds)
   }
 
   /**
@@ -508,11 +523,25 @@ class AudioEngine {
     }
   }
 
-  setPatternType(instrument, patternType) {
-    if (this.instruments[instrument]) {
-      this.instruments[instrument].type = patternType
-    }
+  /**
+   * Reproduce todas las notas de un acorde (para el diapasón)
+   */
+  playChord(chordName, duration = 1) {
+    const voicing = getGuitarVoicing(chordName)
+    if (voicing.length === 0) return
+
+    // Tocar rasgueo coordinado
+    voicing.forEach((note, i) => {
+      const delay = i * 0.05
+      this.guitar.triggerAttackRelease(note, Math.max(0.4, duration - delay), '+' + delay)
+    })
   }
-}
+
+  /**
+   * Reproduce una sola nota del diapasón (alternativa)
+   */
+  playNote(note, duration = 0.5) {
+    this.guitar.triggerAttackRelease(note, duration)
+  }
 
 export const audioEngine = new AudioEngine()

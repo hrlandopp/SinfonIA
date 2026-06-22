@@ -1121,9 +1121,6 @@ input:checked + .slider-round:before {
   font-size: 11px;
 }
 
-/* ══════════════════════════════════════════════════════════════════
-   INPUTS & BUTTONS
-   ══════════════════════════════════════════════════════════════════ */
 .chat-input {
   flex: 1;
   background: var(--c-input);
@@ -1292,4 +1289,16 @@ input:checked + .slider-round:before {
 @keyframes eq-bar {
   from { transform: scaleY(0.4); }
   to   { transform: scaleY(1); }
+}
+
+/* Pulse animation for indicators */
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.5; }
+}
+
+/* Pulse fade animation */
+@keyframes pulse-fade {
+  0% { opacity: 1; }
+  100% { opacity: 0; }
 }

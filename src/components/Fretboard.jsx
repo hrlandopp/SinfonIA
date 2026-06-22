@@ -31,7 +31,14 @@ const parseKeySignature = (keySig) => {
   return { root, scaleType }
 }
 
-export default function Fretboard({ keySignature = 'C', activeChord = '', capoPosition = 0, onPlayNote }) {
+export default function Fretboard({ 
+  keySignature = 'C', 
+  activeChord = '', 
+  capoPosition = 0, 
+  onPlayNote,
+  currentBeat = 0,
+  isPlaying = false
+}) {
   const numFrets = 15
   const { root: scaleRoot, scaleType } = parseKeySignature(keySignature)
   const scaleIntervals = SCALES[scaleType] || SCALES['Mayor']
@@ -82,7 +89,22 @@ export default function Fretboard({ keySignature = 'C', activeChord = '', capoPo
           <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
             Tonalidad: <strong style={{ color: 'var(--text-primary)' }}>{keySignature}</strong> ({scaleType})
             {capoPosition > 0 && ` | Capo en traste ${capoPosition}`}
+            {activeChord && ` | Acorde actual: `}
+            {activeChord && <strong style={{ color: isPlaying ? 'var(--accent-cyan)' : 'var(--text-primary)' }}>{activeChord}</strong>}
           </p>
+          {isPlaying && (
+            <div style={{ 
+              marginTop: '0.5rem', 
+              fontSize: '0.75rem', 
+              display: 'flex', 
+              alignItems: 'center', 
+              gap: '0.5rem',
+              color: 'var(--accent-cyan)'
+            }}>
+              <span style={{ animation: 'pulse 0.5s infinite', display: 'inline-block' }}>●</span>
+              En reproducción - Beat: {Math.floor(currentBeat)}
+            </div>
+          )}
         </div>
         <div style={{ display: 'flex', gap: '0.5rem' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', fontSize: '0.75rem' }}>
@@ -102,6 +124,23 @@ export default function Fretboard({ keySignature = 'C', activeChord = '', capoPo
 
       <div className="fretboard-scroll-container">
         <div className="fretboard-neck">
+          
+          {/* Indicador visual de progreso (solo si está reproduciendo) */}
+          {isPlaying && (
+            <div 
+              style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                right: 0,
+                height: '2px',
+                background: 'linear-gradient(to right, var(--accent-cyan), transparent)',
+                opacity: 0.6,
+                zIndex: 10,
+                animation: 'pulse-fade 0.5s ease-in-out'
+              }}
+            />
+          )}
           
           {capoPosition > 0 && (
             <div 
