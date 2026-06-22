@@ -120,7 +120,7 @@ h1,h2,h3,h4 { font-family: var(--font-head); letter-spacing: -0.02em; font-weigh
 .logo-text { font-family: var(--font-head); font-weight: 800; font-size: 16px; color: var(--c-text-1); line-height: 1.1; }
 .logo-sub { font-size: 11px; color: var(--c-text-3); font-weight: 500; text-transform: uppercase; letter-spacing: 0.05em; }
 
-.dashboard-menu { display: flex; flexDirection: column; gap: 4px; }
+.dashboard-menu { display: flex; flex-direction: column; gap: 4px; }
 .menu-item {
   display: flex; align-items: center; gap: 10px;
   width: 100%; text-align: left;
