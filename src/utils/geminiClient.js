@@ -1,4 +1,4 @@
-import { GoogleGenerativeAI } from '@google/generative-ai'
+import { GoogleGenAI } from '@google/genai'
 
 // Intentar obtener la clave de la API desde variables de entorno o localStorage
 const getGeminiKey = () => {
@@ -14,22 +14,21 @@ export const saveGeminiKey = (key) => {
   window.location.reload()
 }
 
-/**
- * Envía la conversación y el estado actual del proyecto al Asistente Productor de IA
- * @param {string} userMessage Mensaje del usuario
- * @param {Array} chatHistory Historial completo del chat
- * @param {Object} projectState Estado actual del proyecto
- */
-export const sendMessageToProducerAI = async (userMessage, chatHistory, projectState) => {
+// Inicializar el cliente con la clave correspondiente
+const getAiClient = () => {
   const apiKey = getGeminiKey()
   if (!apiKey) {
-    throw new Error('La clave API de Gemini no está configurada. Agrégala en el panel de configuración.')
+    throw new Error('La clave API de Gemini no está configurada.')
   }
+  return new GoogleGenAI({ apiKey })
+}
 
-  // Inicializar el SDK oficial de Google Generative AI
-  const genAI = new GoogleGenerativeAI(apiKey)
-  
-  // Instrucciones del sistema que guiarán a la IA a comportarse como productor musical
+/**
+ * 1. RESPUESTA RÁPIDA Y ACTUALIZACIONES DE PROYECTO (gemini-3.5-flash)
+ */
+export const sendMessageToProducerAI = async (userMessage, chatHistory, projectState) => {
+  const ai = getAiClient()
+
   const systemInstructionText = `
 Eres SinfonIA, un productor musical experto, compositor y guitarrista profesional que asiste al usuario a crear canciones.
 Tus tareas principales son:
@@ -68,19 +67,7 @@ Estado actual del proyecto musical del usuario:
 ${JSON.stringify(projectState, null, 2)}
 `
 
-  // Configurar el modelo con instrucciones del sistema separadas de los mensajes de chat.
-  // Esto evita enviar dos mensajes seguidos del rol "user" que violen la regla de alternancia de la API de Gemini (user -> model -> user -> model).
-  // Usar el modelo gemini-3.5-flash que es el modelo actual recomendado
-  const model = genAI.getGenerativeModel({
-    model: 'gemini-3.5-flash',
-    systemInstruction: systemInstructionText,
-    generationConfig: {
-      responseMimeType: 'application/json',
-    }
-  })
-
-  // Mapear el historial. Ya contiene el último mensaje del usuario (newUserMessage),
-  // por lo que el rol alternará perfectamente de manera natural.
+  // Mapear historial de chat para la API de Gemini
   const contents = chatHistory
     .filter(msg => msg.sender === 'user' || msg.sender === 'assistant')
     .map(msg => ({
@@ -89,14 +76,76 @@ ${JSON.stringify(projectState, null, 2)}
     }))
 
   try {
-    const result = await model.generateContent({ contents })
-    const responseText = result.response.text()
-    
-    // Parsear y devolver el resultado
-    const responseJson = JSON.parse(responseText)
-    return responseJson
+    const response = await ai.models.generateContent({
+      model: 'gemini-3.5-flash',
+      contents: contents,
+      config: {
+        systemInstruction: systemInstructionText,
+        responseMimeType: 'application/json'
+      }
+    })
+
+    const responseText = response.text
+    return JSON.parse(responseText)
   } catch (error) {
-    console.error('Error al generar contenido con Gemini:', error)
-    throw new Error(`Detalles del error: ${error.message || error}`)
+    console.error('Error al generar contenido con Gemini 3.5 Flash:', error)
+    throw new Error(`Detalles: ${error.message || error}`)
+  }
+}
+
+/**
+ * 2. ANÁLISIS COMPLETO Y RAZONAMIENTO CRÍTICO (gemini-3.1-pro)
+ */
+export const runDeepCompositionAnalysis = async (projectState) => {
+  const ai = getAiClient()
+  
+  const prompt = `Realiza un análisis crítico y estructurado de la siguiente composición musical.
+Comenta sobre la relación de acordes, su coherencia con respecto a la tonalidad activa, la progresión emocional de las secciones y sugerencias específicas sobre cómo tocarlo en la guitarra (ej: arpegios interesantes, inversiones de acordes, o uso del capo).
+
+Estructura de la canción:
+${JSON.stringify(projectState, null, 2)}
+
+Devuelve tus consejos en un formato legible, claro y motivador en español.`
+
+  try {
+    const response = await ai.models.generateContent({
+      model: 'gemini-3.1-pro',
+      contents: prompt
+    })
+    return response.text
+  } catch (error) {
+    console.error('Error al generar análisis con Gemini 3.1 Pro:', error)
+    throw new Error(`No se pudo realizar el análisis profundo: ${error.message || error}`)
+  }
+}
+
+/**
+ * 3. GENERACIÓN DE ARTE DE PORTADA (imagen-3.0-generate-002)
+ */
+export const generateSongArt = async (songName, moodDescription) => {
+  const ai = getAiClient()
+
+  const prompt = `A professional Album cover art for a song named "${songName}". The visual theme should express this feeling or description: "${moodDescription}". Flat illustration or professional digital art, cinematic lighting, synthwave or minimal aesthetic, high quality, no text, music album cover, high resolution.`
+
+  try {
+    const response = await ai.models.generateImages({
+      model: 'imagen-3.0-generate-002',
+      prompt: prompt,
+      config: {
+        numberOfImages: 1,
+        aspectRatio: '1:1',
+        outputMimeType: 'image/png'
+      }
+    })
+
+    if (response.generatedImages && response.generatedImages.length > 0) {
+      // Devuelve la imagen codificada en Base64
+      return response.generatedImages[0].image.imageBytes
+    } else {
+      throw new Error('No se generaron imágenes en la respuesta.')
+    }
+  } catch (error) {
+    console.error('Error al generar arte con Imagen 3:', error)
+    throw new Error(`No se pudo generar el arte de portada: ${error.message || error}`)
   }
 }

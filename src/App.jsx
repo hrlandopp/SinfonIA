@@ -2,12 +2,18 @@ import React, { useState, useEffect, useRef } from 'react'
 import { 
   Play, Pause, Square, Send, Settings, Plus, Trash2, 
   Music, Volume2, Sparkles, Sliders, Info, ChevronLeft, 
-  FolderOpen, BookOpen, HelpCircle, HardDrive
+  FolderOpen, BookOpen, HardDrive, Image as ImageIcon, HelpCircle, AlertCircle
 } from 'lucide-react'
 
 import { supabase, isSupabaseConfigured, saveSupabaseCredentials } from './utils/supabaseClient'
-import { sendMessageToProducerAI, isGeminiConfigured, saveGeminiKey } from './utils/geminiClient'
-import { audioEngine } from './utils/AudioEngine'
+import { 
+  sendMessageToProducerAI, 
+  runDeepCompositionAnalysis, 
+  generateSongArt, 
+  isGeminiConfigured, 
+  saveGeminiKey 
+} from './utils/geminiClient'
+import { audioEngine, getGuitarVoicing } from './utils/AudioEngine'
 import Fretboard from './components/Fretboard'
 
 const INITIAL_PROJECTS = [
@@ -18,6 +24,7 @@ const INITIAL_PROJECTS = [
     key_signature: 'Em',
     capo_position: 2,
     mood: 'Melancólico',
+    cover_art: '',
     updated_at: new Date().toISOString()
   },
   {
@@ -27,6 +34,7 @@ const INITIAL_PROJECTS = [
     key_signature: 'Am',
     capo_position: 0,
     mood: 'Enérgico',
+    cover_art: '',
     updated_at: new Date().toISOString()
   }
 ]
@@ -65,13 +73,14 @@ export default function App() {
   
   // --- Estados de Proyectos ---
   const [projectsList, setProjectsList] = useState([])
-  const [project, setProject] = useState(null) // Proyecto seleccionado actualmente
+  const [project, setProject] = useState(null)
   const [sections, setSections] = useState([])
   const [activeSectionId, setActiveSectionId] = useState('')
   
   // --- Estados del Reproductor ---
   const [isPlaying, setIsPlaying] = useState(false)
   const [currentBeat, setCurrentBeat] = useState(0)
+  const [totalBeats, setTotalBeats] = useState(16)
   const [currentChordIndex, setCurrentChordIndex] = useState(0)
   const [currentChordName, setCurrentChordName] = useState('')
   
@@ -80,10 +89,16 @@ export default function App() {
   const [chatInput, setChatInput] = useState('')
   const [isLoadingAi, setIsLoadingAi] = useState(false)
   
+  // --- Razonamiento Pro e Imagen ---
+  const [isAnalyzing, setIsAnalyzing] = useState(false)
+  const [analysisResult, setAnalysisResult] = useState('')
+  const [isAnalysisModalOpen, setIsAnalysisModalOpen] = useState(false)
+  const [isGeneratingArt, setIsGeneratingArt] = useState(false)
+
   // --- Mixer / Instrumentos ---
   const [instruments, setInstruments] = useState({
-    piano: { active: true, volume: -8, type: 'arpeggio' },
-    guitar: { active: false, volume: -12, type: 'strum' },
+    guitar: { active: true, volume: -6, type: 'strum' },
+    piano: { active: true, volume: -12, type: 'arpeggio' },
     bass: { active: true, volume: -10, type: 'roots' },
     drums: { active: true, volume: -12, type: 'basic' }
   })
@@ -93,13 +108,66 @@ export default function App() {
   const [supabaseKey, setSupabaseKey] = useState(localStorage.getItem('supabase_anon_key') || '')
   const [geminiKey, setGeminiKey] = useState(localStorage.getItem('gemini_api_key') || '')
   const [dbStatus, setDbStatus] = useState('Modo Local')
-  
   const [geminiTestResult, setGeminiTestResult] = useState('')
   const [isTestingGemini, setIsTestingGemini] = useState(false)
   
   const chatEndRef = useRef(null)
 
-  // Función de diagnóstico de la clave de Gemini
+  // Cargar proyectos al iniciar
+  useEffect(() => {
+    if (isSupabaseConfigured()) {
+      setDbStatus('Conectado a Supabase ⚡')
+      loadProjectsFromSupabase()
+    } else {
+      setDbStatus('Modo Local')
+      const localProjs = localStorage.getItem('local_projects_list')
+      if (localProjs) {
+        setProjectsList(JSON.parse(localProjs))
+      } else {
+        setProjectsList(INITIAL_PROJECTS)
+        localStorage.setItem('local_projects_list', JSON.stringify(INITIAL_PROJECTS))
+      }
+    }
+  }, [])
+
+  // Auto-scroll chat
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [chatHistory])
+
+  // Sincronizar acordes
+  useEffect(() => {
+    const activeSection = sections.find(s => s.id === activeSectionId)
+    if (activeSection) {
+      audioEngine.setChords(activeSection.chords || [])
+      // Calcular beats totales de la sección
+      const beatsCount = activeSection.chords.reduce((acc, c) => acc + (c.beats || 4), 0)
+      setTotalBeats(beatsCount)
+      
+      if (activeSection.accompaniment) {
+        Object.keys(activeSection.accompaniment).forEach(inst => {
+          audioEngine.setPatternType(inst, activeSection.accompaniment[inst])
+        })
+      }
+    }
+  }, [sections, activeSectionId])
+
+  // Callback del pulso del metrónomo
+  useEffect(() => {
+    audioEngine.onBeatCallback = (beat, chordIdx, chordName, beatsCount) => {
+      setCurrentBeat(beat)
+      setCurrentChordIndex(chordIdx)
+      setCurrentChordName(chordName || '')
+      setTotalBeats(beatsCount || 16)
+    }
+  }, [])
+
+  const saveLocalProjectsToStorage = (list) => {
+    setProjectsList(list)
+    localStorage.setItem('local_projects_list', JSON.stringify(list))
+  }
+
+  // Probar Gemini
   const testGeminiConnection = async () => {
     if (!geminiKey || !geminiKey.trim()) {
       setGeminiTestResult('⚠️ Por favor ingresa una clave antes de probar.')
@@ -139,57 +207,7 @@ export default function App() {
     }
   }
 
-  // Cargar lista de proyectos al iniciar
-  useEffect(() => {
-    if (isSupabaseConfigured()) {
-      setDbStatus('Conectado a Supabase ⚡')
-      loadProjectsFromSupabase()
-    } else {
-      setDbStatus('Modo Local')
-      const localProjs = localStorage.getItem('local_projects_list')
-      if (localProjs) {
-        setProjectsList(JSON.parse(localProjs))
-      } else {
-        setProjectsList(INITIAL_PROJECTS)
-        localStorage.setItem('local_projects_list', JSON.stringify(INITIAL_PROJECTS))
-      }
-    }
-  }, [])
-
-  // Auto-scroll en el chat
-  useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [chatHistory])
-
-  // Sincronizar acordes del reproductor al cambiar de sección
-  useEffect(() => {
-    const activeSection = sections.find(s => s.id === activeSectionId)
-    if (activeSection) {
-      audioEngine.setChords(activeSection.chords || [])
-      if (activeSection.accompaniment) {
-        Object.keys(activeSection.accompaniment).forEach(inst => {
-          audioEngine.setPatternType(inst, activeSection.accompaniment[inst])
-        })
-      }
-    }
-  }, [sections, activeSectionId])
-
-  // Registrar el callback de ritmo del metrónomo
-  useEffect(() => {
-    audioEngine.onBeatCallback = (beat, chordIdx, chordName) => {
-      setCurrentBeat(beat)
-      setCurrentChordIndex(chordIdx)
-      setCurrentChordName(chordName || '')
-    }
-  }, [])
-
-  // Guardar datos locales en localStorage cuando cambian
-  const saveLocalProjectsToStorage = (list) => {
-    setProjectsList(list)
-    localStorage.setItem('local_projects_list', JSON.stringify(list))
-  }
-
-  // --- Funciones de Supabase ---
+  // --- Supabase load ---
   const loadProjectsFromSupabase = async () => {
     try {
       if (!supabase) return
@@ -206,15 +224,14 @@ export default function App() {
     }
   }
 
-  // --- Selección de Proyecto ---
+  // Seleccionar proyecto
   const handleSelectProject = async (selectedProj) => {
     setProject(selectedProj)
     audioEngine.setBpm(selectedProj.tempo_bpm)
-    handleStop() // Detener cualquier reproducción previa
+    handleStop()
     
     if (isSupabaseConfigured() && selectedProj.id !== 'local-project') {
       try {
-        // Cargar secciones
         const { data: secs, error: sErr } = await supabase
           .from('sections')
           .select('*')
@@ -227,7 +244,6 @@ export default function App() {
           setActiveSectionId(secs[0].id)
         }
 
-        // Cargar chat
         const { data: chat, error: cErr } = await supabase
           .from('chat_history')
           .select('*')
@@ -246,7 +262,6 @@ export default function App() {
         console.error(e)
       }
     } else {
-      // Modo Local - Leer de localStorage
       const localSecs = localStorage.getItem(`local_secs_${selectedProj.id}`)
       const localChat = localStorage.getItem(`local_chat_${selectedProj.id}`)
       
@@ -255,7 +270,6 @@ export default function App() {
         setSections(parsedSecs)
         setActiveSectionId(parsedSecs[0]?.id || '')
       } else {
-        // Inicializar secciones por defecto en local
         const initialSecs = DEFAULT_SECTIONS_FOR_NEW.map(s => ({ ...s, id: `${s.id}-${Date.now()}` }))
         setSections(initialSecs)
         setActiveSectionId(initialSecs[0].id)
@@ -280,7 +294,7 @@ export default function App() {
     setCurrentView('editor')
   }
 
-  // --- Crear Nuevo Proyecto ---
+  // Crear proyecto
   const handleCreateProject = async () => {
     const projName = prompt('Nombre del nuevo proyecto:', 'Mi Canción')
     if (!projName || !projName.trim()) return
@@ -291,6 +305,7 @@ export default function App() {
       key_signature: 'C',
       capo_position: 0,
       mood: 'Neutral',
+      cover_art: '',
       updated_at: new Date().toISOString()
     }
 
@@ -304,12 +319,11 @@ export default function App() {
         if (pErr) throw pErr
         
         if (!newProj || newProj.length === 0) {
-          throw new Error('Supabase no devolvió los datos del proyecto creado. Esto suele ocurrir cuando el Row Level Security (RLS) está activo y bloquea las inserciones. Ve al editor SQL de Supabase y ejecuta: ALTER TABLE projects DISABLE ROW LEVEL SECURITY; e inténtalo de nuevo.')
+          throw new Error('Supabase no devolvió los datos. RLS podría estar activo.')
         }
         
         const createdProj = newProj[0]
 
-        // Crear secciones
         const initialSections = DEFAULT_SECTIONS_FOR_NEW.map((sec, idx) => ({
           project_id: createdProj.id,
           name: sec.name,
@@ -328,10 +342,9 @@ export default function App() {
         handleSelectProject(createdProj)
       } catch (e) {
         console.error(e)
-        alert(`No se pudo crear el proyecto en Supabase:\n\n${e.message || 'Error desconocido'}`)
+        alert(`No se pudo crear en Supabase: ${e.message}`)
       }
     } else {
-      // Guardar en Modo Local
       const newLocalId = `local-proj-${Date.now()}`
       const createdProj = { ...newProjData, id: newLocalId }
       
@@ -341,10 +354,10 @@ export default function App() {
     }
   }
 
-  // --- Borrar Proyecto ---
+  // Borrar proyecto
   const handleDeleteProject = async (id, e) => {
     e.stopPropagation()
-    if (!confirm('¿Estás seguro de que deseas borrar este proyecto permanentemente?')) return
+    if (!confirm('¿Deseas borrar este proyecto?')) return
 
     if (isSupabaseConfigured()) {
       try {
@@ -361,19 +374,16 @@ export default function App() {
     } else {
       const updated = projectsList.filter(p => p.id !== id)
       saveLocalProjectsToStorage(updated)
-      
-      // Limpiar datos huérfanos de localStorage
       localStorage.removeItem(`local_secs_${id}`)
       localStorage.removeItem(`local_chat_${id}`)
     }
   }
 
-  // --- Guardar Cambios en Caliente ---
+  // Guardar en caliente
   const saveCurrentState = (updatedProj, updatedSecs) => {
     if (isSupabaseConfigured() && updatedProj.id !== 'local-project') {
       saveProjectStateToSupabase(updatedProj, updatedSecs)
     } else {
-      // Guardar local
       const updatedList = projectsList.map(p => p.id === updatedProj.id ? { ...updatedProj, updated_at: new Date().toISOString() } : p)
       saveLocalProjectsToStorage(updatedList)
       localStorage.setItem(`local_secs_${updatedProj.id}`, JSON.stringify(updatedSecs))
@@ -392,6 +402,7 @@ export default function App() {
           key_signature: updatedProj.key_signature,
           capo_position: updatedProj.capo_position,
           mood: updatedProj.mood,
+          cover_art: updatedProj.cover_art,
           updated_at: new Date().toISOString()
         })
         .eq('id', updatedProj.id)
@@ -412,28 +423,69 @@ export default function App() {
     }
   }
 
-  // --- Controles de Audio ---
-  const handlePlayToggle = async () => {
-    await audioEngine.startContext()
-    if (isPlaying) {
-      audioEngine.pause()
-      setIsPlaying(false)
-    } else {
-      audioEngine.setBpm(project.tempo_bpm)
-      audioEngine.play()
-      setIsPlaying(true)
+  // --- Iniciar Análisis Profundo (gemini-3.1-pro) ---
+  const handleRunAnalysis = async () => {
+    if (!isGeminiConfigured()) {
+      alert('Configura tu clave de Gemini API primero.')
+      return
+    }
+
+    setIsAnalyzing(true)
+    setAnalysisResult('El productor analítico de SinfonIA está estudiando tu progresión. Espera un momento...')
+    setIsAnalysisModalOpen(true)
+
+    try {
+      const pState = {
+        name: project.name,
+        key_signature: project.key_signature,
+        tempo_bpm: project.tempo_bpm,
+        capo_position: project.capo_position,
+        mood: project.mood,
+        sections: sections.map(s => ({
+          name: s.name,
+          chords: s.chords
+        }))
+      }
+      
+      const critique = await runDeepCompositionAnalysis(pState)
+      setAnalysisResult(critique)
+    } catch (e) {
+      console.error(e)
+      setAnalysisResult(`❌ Error en el análisis: ${e.message}`)
+    } finally {
+      setIsAnalyzing(false)
     }
   }
 
-  const handleStop = () => {
-    audioEngine.stop()
-    setIsPlaying(false)
-    setCurrentBeat(0)
-    setCurrentChordIndex(0)
-    const activeSec = sections.find(s => s.id === activeSectionId)
-    setCurrentChordName(activeSec?.chords[0]?.chord || '')
+  // --- Generar Portada (imagen-3.0-generate-002) ---
+  const handleGenerateCover = async () => {
+    if (!isGeminiConfigured()) {
+      alert('Configura tu clave de Gemini API primero.')
+      return
+    }
+
+    const description = prompt('Describe visualmente tu canción o el sentimiento (en inglés o español):', project.mood || 'A melancholic guitar vibe')
+    if (!description) return
+
+    setIsGeneratingArt(true)
+    try {
+      const base64Bytes = await generateSongArt(project.name, description)
+      const dataUri = `data:image/png;base64,${base64Bytes}`
+      
+      const updatedProject = { ...project, cover_art: dataUri }
+      setProject(updatedProject)
+      saveCurrentState(updatedProject, sections)
+      
+      alert('🎨 Portada generada con éxito con Imagen 3!')
+    } catch (e) {
+      console.error(e)
+      alert(`No se pudo generar el arte: ${e.message}`)
+    } finally {
+      setIsGeneratingArt(false)
+    }
   }
 
+  // --- Controles de Playback ---
   const updateBpm = (newBpm) => {
     const val = Math.min(240, Math.max(40, parseInt(newBpm) || 120))
     const updated = { ...project, tempo_bpm: val }
@@ -455,150 +507,7 @@ export default function App() {
     saveCurrentState(updated, sections)
   }
 
-  // --- Enviar Chat ---
-  const handleSendChatMessage = async (e) => {
-    e.preventDefault()
-    if (!chatInput.trim() || isLoadingAi) return
-
-    const userMsg = chatInput.trim()
-    setChatInput('')
-
-    const newUserMessage = {
-      id: Date.now().toString(),
-      sender: 'user',
-      message: userMsg,
-      created_at: new Date().toISOString()
-    }
-    
-    const updatedHistory = [...chatHistory, newUserMessage]
-    setChatHistory(updatedHistory)
-    
-    if (isSupabaseConfigured() && project.id !== 'local-project') {
-      await supabase.from('chat_history').insert([{
-        project_id: project.id,
-        sender: 'user',
-        message: userMsg
-      }])
-    } else {
-      localStorage.setItem(`local_chat_${project.id}`, JSON.stringify(updatedHistory))
-    }
-
-    if (!isGeminiConfigured() && !geminiKey) {
-      setChatHistory(prev => [...prev, {
-        id: Date.now().toString(),
-        sender: 'assistant',
-        message: '⚠️ La clave de API de Gemini no está configurada. Haz clic en "Volver" y configúrala en el menú de Ajustes.'
-      }])
-      return
-    }
-
-    setIsLoadingAi(true)
-
-    try {
-      const projectState = {
-        name: project.name,
-        tempo_bpm: project.tempo_bpm,
-        key_signature: project.key_signature,
-        capo_position: project.capo_position,
-        mood: project.mood,
-        sections: sections.map(s => ({
-          name: s.name,
-          chords: s.chords,
-          order_index: s.order_index
-        }))
-      }
-
-      const aiResponse = await sendMessageToProducerAI(userMsg, updatedHistory, projectState)
-      
-      let systemActions = []
-      let tempProject = { ...project }
-      let tempSections = [...sections]
-
-      if (aiResponse.changes) {
-        const changes = aiResponse.changes
-        let changed = false
-
-        if (changes.tempo_bpm !== undefined && changes.tempo_bpm !== project.tempo_bpm) {
-          tempProject.tempo_bpm = changes.tempo_bpm
-          audioEngine.setBpm(changes.tempo_bpm)
-          systemActions.push(`BPM a ${changes.tempo_bpm}`)
-          changed = true
-        }
-
-        if (changes.key_signature !== undefined && changes.key_signature !== project.key_signature) {
-          tempProject.key_signature = changes.key_signature
-          systemActions.push(`Tono a ${changes.key_signature}`)
-          changed = true
-        }
-
-        if (changes.capo_position !== undefined && changes.capo_position !== project.capo_position) {
-          tempProject.capo_position = changes.capo_position
-          systemActions.push(`Capo en traste ${changes.capo_position}`)
-          changed = true
-        }
-
-        if (changes.sections && Array.isArray(changes.sections)) {
-          tempSections = changes.sections.map((sec, idx) => ({
-            id: sections[idx]?.id || `sec-${Date.now()}-${idx}`,
-            name: sec.name,
-            order_index: sec.order_index ?? idx,
-            chords: sec.chords || [],
-            accompaniment: sections[idx]?.accompaniment || { piano: 'arpeggio', bass: 'roots', drums: 'basic' }
-          }))
-          systemActions.push(`Acordes editados por el productor`)
-          changed = true
-        }
-
-        if (changed) {
-          setProject(tempProject)
-          setSections(tempSections)
-          saveCurrentState(tempProject, tempSections)
-        }
-      }
-
-      const newAiMessage = {
-        id: (Date.now() + 1).toString(),
-        sender: 'assistant',
-        message: aiResponse.message,
-        created_at: new Date().toISOString()
-      }
-
-      const nextHistory = [...updatedHistory]
-      
-      if (systemActions.length > 0) {
-        nextHistory.push({
-          id: `log-${Date.now()}`,
-          sender: 'system',
-          message: `🛠️ Productor IA: [${systemActions.join(' | ')}]`
-        })
-      }
-      
-      nextHistory.push(newAiMessage)
-      setChatHistory(nextHistory)
-
-      if (isSupabaseConfigured() && project.id !== 'local-project') {
-        await supabase.from('chat_history').insert([{
-          project_id: project.id,
-          sender: 'assistant',
-          message: aiResponse.message
-        }])
-      } else {
-        localStorage.setItem(`local_chat_${project.id}`, JSON.stringify(nextHistory))
-      }
-
-    } catch (error) {
-      console.error(error)
-      setChatHistory(prev => [...prev, {
-        id: Date.now().toString(),
-        sender: 'assistant',
-        message: `⚠️ Hubo un error de conexión: ${error.message}`
-      }])
-    } finally {
-      setIsLoadingAi(false)
-    }
-  }
-
-  // --- Ajustes del Mixer ---
+  // --- Mixer ---
   const toggleInstrument = (instName) => {
     const updatedActive = !instruments[instName].active
     setInstruments(prev => ({
@@ -628,10 +537,7 @@ export default function App() {
       if (s.id === activeSectionId) {
         return {
           ...s,
-          accompaniment: {
-            ...s.accompaniment,
-            [instName]: type
-          }
+          accompaniment: { ...s.accompaniment, [instName]: type }
         }
       }
       return s
@@ -640,7 +546,7 @@ export default function App() {
     saveCurrentState(project, updatedSecs)
   }
 
-  // --- Control de Secciones ---
+  // --- Secciones ---
   const addNewSection = () => {
     const newIdx = sections.length
     const names = ['Verso', 'Coro', 'Puente', 'Outro']
@@ -702,29 +608,12 @@ export default function App() {
     saveCurrentState(project, updated)
   }
 
-  const playFretNote = async (noteName, midiVal) => {
-    await audioEngine.startContext()
-    audioEngine.piano.triggerAttackRelease(noteName + '4', '8n')
-  }
-
   const activeSection = sections.find(s => s.id === activeSectionId)
-  
-  const handleSaveSettings = (e) => {
-    e.preventDefault()
-    if (supabaseUrl && supabaseKey) {
-      saveSupabaseCredentials(supabaseUrl, supabaseKey)
-    }
-    if (geminiKey) {
-      saveGeminiKey(geminiKey)
-    }
-  }
 
-  // --- RENDERIZADO VISTA 1: MENÚ PRINCIPAL ---
+  // --- RENDERIZADO VISTA 1: DASHBOARD ---
   if (currentView === 'dashboard') {
     return (
       <div className="app-container dashboard-layout">
-        
-        {/* Barra Lateral del Menú */}
         <aside className="dashboard-sidebar">
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0 0.5rem' }}>
@@ -736,26 +625,14 @@ export default function App() {
             </div>
 
             <nav className="dashboard-menu">
-              <button 
-                className={`menu-item ${activeTab === 'projects' ? 'active' : ''}`}
-                onClick={() => setActiveTab('projects')}
-              >
-                <FolderOpen size={16} />
-                Mis Proyectos
+              <button className={`menu-item ${activeTab === 'projects' ? 'active' : ''}`} onClick={() => setActiveTab('projects')}>
+                <FolderOpen size={16} /> Mis Proyectos
               </button>
-              <button 
-                className={`menu-item ${activeTab === 'settings' ? 'active' : ''}`}
-                onClick={() => setActiveTab('settings')}
-              >
-                <Settings size={16} />
-                Ajustes de API
+              <button className={`menu-item ${activeTab === 'settings' ? 'active' : ''}`} onClick={() => setActiveTab('settings')}>
+                <Settings size={16} /> Ajustes de API
               </button>
-              <button 
-                className={`menu-item ${activeTab === 'help' ? 'active' : ''}`}
-                onClick={() => setActiveTab('help')}
-              >
-                <BookOpen size={16} />
-                Ayuda y Guía
+              <button className={`menu-item ${activeTab === 'help' ? 'active' : ''}`} onClick={() => setActiveTab('help')}>
+                <BookOpen size={16} /> Ayuda y Guía
               </button>
             </nav>
           </div>
@@ -766,15 +643,13 @@ export default function App() {
           </div>
         </aside>
 
-        {/* Contenido Principal según Pestaña */}
         <main className="dashboard-content">
-          
           {activeTab === 'projects' && (
             <>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border-color)', paddingBottom: '1rem' }}>
                 <div>
                   <h1 style={{ fontSize: '1.75rem', fontWeight: 800 }}>Proyectos de Composición</h1>
-                  <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Selecciona un proyecto existente o crea uno nuevo para empezar a componer.</p>
+                  <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Selecciona un proyecto o crea uno nuevo para empezar a componer.</p>
                 </div>
                 <button className="btn-primary" onClick={handleCreateProject}>
                   <Plus size={16} /> Nuevo Proyecto
@@ -784,7 +659,7 @@ export default function App() {
               {dbStatus.includes('Error') && (
                 <div style={{ padding: '1rem', backgroundColor: 'rgba(239, 68, 68, 0.1)', border: '1px solid var(--accent-red)', color: '#fca5a5', fontSize: '0.85rem', borderRadius: 'var(--radius-sm)', display: 'flex', flexDirection: 'column', gap: '0.5rem', marginTop: '1rem' }}>
                   <strong>⚠️ Error al conectar con Supabase:</strong>
-                  <span>Es posible que no hayas creado las tablas en tu base de datos de Supabase. Copia el archivo <code>supabase/schema.sql</code> de tu proyecto y ejecútalo en la pestaña "SQL Editor" en el panel web de Supabase. Asegúrate de desactivar el sistema RLS (Row Level Security) para evitar bloqueos de permisos.</span>
+                  <span>Es posible que no hayas creado las tablas. Ejecuta el archivo <code>supabase/schema.sql</code> en tu SQL Editor de Supabase y desactiva el RLS.</span>
                 </div>
               )}
 
@@ -797,35 +672,35 @@ export default function App() {
               ) : (
                 <div className="projects-grid">
                   {projectsList.map((p) => (
-                    <div 
-                      key={p.id} 
-                      className="project-card"
-                      onClick={() => handleSelectProject(p)}
-                    >
-                      <div className="project-card-header">
+                    <div key={p.id} className="project-card" onClick={() => handleSelectProject(p)} style={{ position: 'relative', overflow: 'hidden' }}>
+                      
+                      {/* Portada de fondo si existe */}
+                      {p.cover_art && (
+                        <div style={{ position: 'absolute', top: 0, right: 0, bottom: 0, width: '100px', backgroundImage: `url(${p.cover_art})`, backgroundSize: 'cover', backgroundPosition: 'center', opacity: 0.35, borderLeft: '1px solid var(--border-color)' }} />
+                      )}
+
+                      <div className="project-card-header" style={{ zIndex: 2, position: 'relative', width: p.cover_art ? 'calc(100% - 100px)' : '100%' }}>
                         <div>
                           <h3 className="project-card-title">{p.name}</h3>
                           <div className="project-card-meta">
                             <span>{p.tempo_bpm} BPM</span>
                             <span>Tono: {p.key_signature}</span>
-                            {p.capo_position > 0 && <span>Capo: {p.capo_position}</span>}
                           </div>
                         </div>
                         <button 
                           onClick={(e) => handleDeleteProject(p.id, e)}
                           style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}
-                          title="Eliminar proyecto"
                           className="hover:text-red-500"
                         >
                           <Trash2 size={14} />
                         </button>
                       </div>
 
-                      <div className="project-card-footer">
+                      <div className="project-card-footer" style={{ zIndex: 2, position: 'relative' }}>
                         <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
                           Modificado: {new Date(p.updated_at).toLocaleDateString()}
                         </span>
-                        <span style={{ fontSize: '0.75rem', color: 'var(--accent-blue)', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '0.2rem' }}>
+                        <span style={{ fontSize: '0.75rem', color: 'var(--accent-blue)', fontWeight: 'bold' }}>
                           Abrir Estudio →
                         </span>
                       </div>
@@ -840,44 +715,23 @@ export default function App() {
             <div style={{ maxWidth: '600px' }}>
               <div style={{ borderBottom: '1px solid var(--border-color)', paddingBottom: '1rem', marginBottom: '1.5rem' }}>
                 <h1 style={{ fontSize: '1.75rem', fontWeight: 800 }}>Configuración de API & Backend</h1>
-                <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Configura tus llaves para habilitar el guardado automático en la nube y la inteligencia artificial.</p>
+                <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Configura tus llaves para habilitar el guardado automático y la inteligencia artificial.</p>
               </div>
 
               <form onSubmit={handleSaveSettings} style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
                 <div className="form-group">
                   <label className="form-label" htmlFor="gemini-key-dashboard">Google Gemini API Key (AI Studio)</label>
                   <div style={{ display: 'flex', gap: '0.5rem' }}>
-                    <input 
-                      id="gemini-key-dashboard"
-                      type="password" 
-                      placeholder="AIzaSy..." 
-                      value={geminiKey} 
-                      onChange={(e) => setGeminiKey(e.target.value)}
-                      className="chat-input"
-                    />
-                    <button 
-                      type="button" 
-                      onClick={testGeminiConnection}
-                      className="btn-flat"
-                      disabled={isTestingGemini}
-                      style={{ padding: '0.5rem 0.8rem', fontSize: '0.75rem', whiteSpace: 'nowrap' }}
-                    >
+                    <input id="gemini-key-dashboard" type="password" placeholder="AIzaSy..." value={geminiKey} onChange={(e) => setGeminiKey(e.target.value)} className="chat-input" />
+                    <button type="button" onClick={testGeminiConnection} className="btn-flat" disabled={isTestingGemini} style={{ padding: '0.5rem 0.8rem', fontSize: '0.75rem', whiteSpace: 'nowrap' }}>
                       {isTestingGemini ? 'Probando...' : 'Probar Clave'}
                     </button>
                   </div>
                   <span style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>
-                    Requerido para conversar con tu productor musical de IA. Consigue una gratis en <a href="https://aistudio.google.com/" target="_blank" rel="noreferrer" style={{ color: 'var(--accent-blue)' }}>Google AI Studio</a>.
+                    Requerido para conversar con tu productor. Consigue una en <a href="https://aistudio.google.com/" target="_blank" rel="noreferrer" style={{ color: 'var(--accent-blue)' }}>Google AI Studio</a>.
                   </span>
                   {geminiTestResult && (
-                    <div style={{ 
-                      fontSize: '0.75rem', 
-                      marginTop: '0.5rem', 
-                      padding: '0.5rem', 
-                      backgroundColor: geminiTestResult.includes('✅') ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)', 
-                      border: geminiTestResult.includes('✅') ? '1px solid var(--accent-green)' : '1px solid var(--accent-red)', 
-                      color: geminiTestResult.includes('✅') ? '#a7f3d0' : '#fca5a5',
-                      borderRadius: 'var(--radius-sm)'
-                    }}>
+                    <div style={{ fontSize: '0.75rem', marginTop: '0.5rem', padding: '0.5rem', backgroundColor: geminiTestResult.includes('✅') ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)', border: geminiTestResult.includes('✅') ? '1px solid var(--accent-green)' : '1px solid var(--accent-red)', color: geminiTestResult.includes('✅') ? '#a7f3d0' : '#fca5a5', borderRadius: 'var(--radius-sm)' }}>
                       {geminiTestResult}
                     </div>
                   )}
@@ -887,29 +741,12 @@ export default function App() {
 
                 <div className="form-group">
                   <label className="form-label" htmlFor="supabase-url-dashboard">Supabase Project URL</label>
-                  <input 
-                    id="supabase-url-dashboard"
-                    type="text" 
-                    placeholder="https://xyz.supabase.co" 
-                    value={supabaseUrl} 
-                    onChange={(e) => setSupabaseUrl(e.target.value)}
-                    className="chat-input"
-                  />
+                  <input id="supabase-url-dashboard" type="text" placeholder="https://xyz.supabase.co" value={supabaseUrl} onChange={(e) => setSupabaseUrl(e.target.value)} className="chat-input" />
                 </div>
 
                 <div className="form-group">
                   <label className="form-label" htmlFor="supabase-key-dashboard">Supabase Anon Key</label>
-                  <input 
-                    id="supabase-key-dashboard"
-                    type="password" 
-                    placeholder="eyJhbGciOi..." 
-                    value={supabaseKey} 
-                    onChange={(e) => setSupabaseKey(e.target.value)}
-                    className="chat-input"
-                  />
-                  <span style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>
-                    Conecta Supabase para guardar tus proyectos en la nube automáticamente y acceder a ellos desde cualquier dispositivo. Si lo dejas en blanco, se guardarán en tu navegador (localmente).
-                  </span>
+                  <input id="supabase-key-dashboard" type="password" placeholder="eyJhbGciOi..." value={supabaseKey} onChange={(e) => setSupabaseKey(e.target.value)} className="chat-input" />
                 </div>
 
                 <button type="submit" className="btn-primary" style={{ alignSelf: 'flex-start' }}>
@@ -926,39 +763,38 @@ export default function App() {
                 <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Conceptos básicos para sacarle el máximo partido a tu estudio inteligente.</p>
               </div>
 
-              <div className="daw-panel" style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              <div className="daw-panel" style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                 <h3 style={{ color: 'var(--accent-amber)' }}>🎙️ Conversar con el Productor</h3>
-                <p style={{ fontSize: '0.9rem', lineHeight: '1.5', color: 'var(--text-secondary)' }}>
-                  El chat de IA no es solo para texto. Cuando hablas con SinfonIA sobre tus sentimientos o ideas (ej: *"Quiero que el intro suene más triste y despacio"* o *"Agrega un acorde de Re mayor al final del coro"*), el productor modificará **directamente** los parámetros de tu proyecto (BPM, tonalidad o la lista de acordes). Verás reflejados los cambios de inmediato en tu pantalla.
+                <p style={{ fontSize: '0.85rem', lineHeight: '1.5', color: 'var(--text-secondary)' }}>
+                  SinfonIA utiliza **Gemini 3.5 Flash** para procesar tus mensajes conversacionales y realizar cambios en tu canción automáticamente en base a tus sentimientos.
                 </p>
               </div>
 
-              <div className="daw-panel" style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                <h3 style={{ color: 'var(--accent-blue)' }}>🎸 El Capotraste y el Mástil</h3>
-                <p style={{ fontSize: '0.9rem', lineHeight: '1.5', color: 'var(--text-secondary)' }}>
-                  Si usas un capotraste en tu guitarra física, indícalo en el control **Capo** del menú superior. El diapasón visual de la pantalla se bloqueará detrás de ese traste y transpondrá todas las notas en tiempo real para que coincidan con la posición física donde debes colocar tus dedos. Las notas rojas representan la raíz (tónica) de la escala, las azules las notas del acorde actual y las transparentes/grises el resto de la escala.
+              <div className="daw-panel" style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                <h3 style={{ color: 'var(--accent-blue)' }}>🧠 Razonamiento Pro (Gemini 3.1 Pro)</h3>
+                <p style={{ fontSize: '0.85rem', lineHeight: '1.5', color: 'var(--text-secondary)' }}>
+                  Al presionar el botón de la varita mágica **"Análisis de Producción"** en el editor, el motor llamará a **Gemini 3.1 Pro** para que examine a fondo tu estructura, tono y métrica, y te devuelva consejos avanzados y teoría musical aplicada a tu guitarra.
                 </p>
               </div>
 
-              <div className="daw-panel" style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                <h3 style={{ color: 'var(--accent-green)' }}>🎹 Mezclador de Acompañamiento</h3>
-                <p style={{ fontSize: '0.9rem', lineHeight: '1.5', color: 'var(--text-secondary)' }}>
-                  A la derecha tienes el mixer. Activa el piano y configúralo en **Arpegio** para escuchar melodías fluidas sobre tus acordes. Modifica el estilo del bajo a **Caminante** para darle un toque dinámico o enciende la percusión para marcar el ritmo. Puedes reproducir cada nota del mástil de la guitarra de forma individual haciendo clic sobre ellas.
+              <div className="daw-panel" style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                <h3 style={{ color: 'var(--accent-green)' }}>🎨 Portadas con Imagen 3</h3>
+                <p style={{ fontSize: '0.85rem', lineHeight: '1.5', color: 'var(--text-secondary)' }}>
+                  Puedes usar el botón **"Generar Portada"** en el mixer de la derecha para evocar un sentimiento visual. El motor llamará a **Imagen 3** para crear una carátula personalizada base64 para tu disco.
                 </p>
               </div>
             </div>
           )}
-
         </main>
       </div>
     )
   }
 
-  // --- RENDERIZADO VISTA 2: ESPACIO DE EDICIÓN (DAW WORKSPACE) ---
+  // --- RENDERIZADO VISTA 2: ESPACIO DE EDICIÓN ---
   return (
     <div className="app-container editor-layout">
       
-      {/* PANEL IZQUIERDO: CHAT DE IA */}
+      {/* 1. CHAT DE IA */}
       <aside className="chat-sidebar">
         <header className="chat-header">
           <button className="btn-flat" onClick={() => setCurrentView('dashboard')} style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', padding: '0.35rem 0.6rem' }}>
@@ -970,17 +806,10 @@ export default function App() {
         <div className="chat-messages">
           {chatHistory.map((msg) => {
             if (msg.sender === 'system') {
-              return (
-                <div key={msg.id} className="message-system-log">
-                  {msg.message}
-                </div>
-              )
+              return <div key={msg.id} className="message-system-log">{msg.message}</div>
             }
             return (
-              <div 
-                key={msg.id} 
-                className={`message-bubble ${msg.sender === 'user' ? 'message-user' : 'message-assistant'}`}
-              >
+              <div key={msg.id} className={`message-bubble ${msg.sender === 'user' ? 'message-user' : 'message-assistant'}`}>
                 {msg.message}
               </div>
             )
@@ -995,12 +824,9 @@ export default function App() {
 
         <form onSubmit={handleSendChatMessage} className="chat-input-area">
           <input 
-            type="text" 
-            placeholder="Pídele cambios a SinfonIA..." 
-            value={chatInput}
-            onChange={(e) => setChatInput(e.target.value)}
-            className="chat-input"
-            disabled={isLoadingAi}
+            type="text" placeholder="Pídele cambios a SinfonIA..." 
+            value={chatInput} onChange={(e) => setChatInput(e.target.value)} 
+            className="chat-input" disabled={isLoadingAi}
           />
           <button type="submit" className="btn-primary" disabled={isLoadingAi || !chatInput.trim()}>
             <Send size={14} />
@@ -1008,7 +834,7 @@ export default function App() {
         </form>
       </aside>
 
-      {/* ÁREA CENTRAL: SECUENCIADOR Y GUITARRA */}
+      {/* 2. ÁREA CENTRAL: SECUENCIADOR MULTIPISTA */}
       <main className="studio-workspace">
         
         <header className="daw-panel workspace-header">
@@ -1018,37 +844,32 @@ export default function App() {
           </div>
 
           <div className="project-meta-controls">
+            {/* Botón de Razonamiento Pro con Gemini 3.1 Pro */}
+            <button className="btn-primary" onClick={handleRunAnalysis} style={{ background: '#d97706', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+              <Sparkles size={14} /> Análisis de Producción
+            </button>
+
             <div className="play-controls">
-              <button 
-                onClick={handlePlayToggle} 
-                className={`btn-icon ${isPlaying ? 'active' : ''}`}
-                title={isPlaying ? 'Pausar' : 'Reproducir'}
-                id="btn-play-toggle"
-              >
+              <button onClick={handlePlayToggle} className={`btn-icon ${isPlaying ? 'active' : ''}`} title="Play/Pause">
                 {isPlaying ? <Pause size={16} /> : <Play size={16} />}
               </button>
-              <button onClick={handleStop} className="btn-icon" title="Detener" id="btn-stop">
+              <button onClick={handleStop} className="btn-icon" title="Detener">
                 <Square size={16} />
               </button>
             </div>
 
-            {/* Tempo (BPM) */}
             <div className="control-pill">
               <span>BPM:</span>
               <input 
-                type="number" 
-                value={project.tempo_bpm} 
-                onChange={(e) => updateBpm(e.target.value)}
+                type="number" value={project.tempo_bpm} onChange={(e) => updateBpm(e.target.value)}
                 style={{ width: '40px', background: 'transparent', border: 'none', color: 'white', fontWeight: 'bold', outline: 'none' }}
               />
             </div>
 
-            {/* Tonalidad */}
             <div className="control-pill badge-interactive">
               <span>Tono:</span>
               <select 
-                value={project.key_signature}
-                onChange={(e) => updateKeySignature(e.target.value)}
+                value={project.key_signature} onChange={(e) => updateKeySignature(e.target.value)}
                 style={{ background: 'transparent', border: 'none', color: 'white', fontWeight: 'bold', cursor: 'pointer', outline: 'none' }}
               >
                 {['C', 'G', 'D', 'A', 'E', 'B', 'F#', 'F', 'Bb', 'Eb', 'Ab', 'Db', 'Am', 'Em', 'Bm', 'F#m', 'C#m', 'G#m', 'Dm', 'Gm', 'Cm', 'Fm'].map(k => (
@@ -1057,134 +878,231 @@ export default function App() {
               </select>
             </div>
 
-            {/* Capo */}
             <div className="control-pill">
               <span>Capo:</span>
               <input 
-                type="number" 
-                min="0" 
-                max="12"
-                value={project.capo_position} 
-                onChange={(e) => updateCapoPosition(e.target.value)}
+                type="number" min="0" max="12" value={project.capo_position} onChange={(e) => updateCapoPosition(e.target.value)}
                 style={{ width: '30px', background: 'transparent', border: 'none', color: 'white', fontWeight: 'bold', outline: 'none' }}
               />
             </div>
           </div>
         </header>
 
-        {/* Secuenciador */}
-        <section className="daw-panel sequencer-panel">
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
-            <div>
-              <h2 style={{ fontSize: '1.05rem', fontWeight: '700' }}>Secciones de la Canción</h2>
-            </div>
-            <button className="btn-flat" onClick={addNewSection} style={{ padding: '0.35rem 0.6rem', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.2rem' }}>
-              <Plus size={12} /> Añadir Sección
+        {/* Sección de navegación de partes */}
+        <section className="daw-panel" style={{ padding: '0.85rem 1rem' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+            <span style={{ fontSize: '0.8rem', fontWeight: 'bold' }}>Secciones:</span>
+            <button className="btn-flat" onClick={addNewSection} style={{ padding: '0.2rem 0.5rem', fontSize: '0.7rem' }}>
+              + Añadir Sección
             </button>
           </div>
-
-          <div className="sequencer-grid">
+          <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
             {sections.map((sec) => (
-              <div 
+              <button 
                 key={sec.id} 
-                className={`section-card ${activeSectionId === sec.id ? 'active' : ''}`}
-                onClick={() => {
-                  setActiveSectionId(sec.id)
-                  handleStop()
+                className={`btn-flat ${activeSectionId === sec.id ? 'active' : ''}`}
+                onClick={() => { setActiveSectionId(sec.id); handleStop(); }}
+                style={{ 
+                  backgroundColor: activeSectionId === sec.id ? 'var(--accent-blue)' : 'var(--bg-element)',
+                  borderColor: activeSectionId === sec.id ? 'var(--accent-blue)' : 'var(--border-color)',
+                  color: 'white', display: 'flex', alignItems: 'center', gap: '0.5rem'
                 }}
               >
-                <div className="section-title">
-                  <span>{sec.name}</span>
-                  {sections.length > 1 && (
-                    <button 
-                      onClick={(e) => deleteSection(sec.id, e)} 
-                      style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}
-                    >
-                      <Trash2 size={12} className="hover:text-red-500" />
-                    </button>
-                  )}
-                </div>
-                
-                <div className="section-chords-list">
-                  {sec.chords.map((c, cIdx) => (
-                    <span 
-                      key={cIdx} 
-                      className={`chord-badge ${isPlaying && activeSectionId === sec.id && currentChordIndex === cIdx ? 'active-chord' : ''}`}
-                    >
-                      {c.chord}
-                    </span>
-                  ))}
-                </div>
-              </div>
+                {sec.name}
+                {sections.length > 1 && (
+                  <span onClick={(e) => deleteSection(sec.id, e)} style={{ opacity: 0.5, cursor: 'pointer' }} className="hover:text-red-500">×</span>
+                )}
+              </button>
             ))}
           </div>
         </section>
 
-        {/* Detalle sección */}
+        {/* LÍNEA DE TIEMPO MULTIPISTA (VISTA DAW COMPLETA) */}
         {activeSection && (
-          <section className="daw-panel" style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+          <section className="daw-panel" style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', overflow: 'hidden' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div>
-                <h3 style={{ fontSize: '0.95rem', fontWeight: 700 }}>Sección enfocada: {activeSection.name}</h3>
-              </div>
-              <button onClick={removeLastChordFromActive} className="btn-flat" style={{ padding: '0.3rem 0.6rem', fontSize: '0.75rem' }}>
-                Remover Último Acorde
+              <h3 style={{ fontSize: '0.9rem', fontWeight: 700 }}>Línea de Tiempo Multipista ({activeSection.name})</h3>
+              <button onClick={removeLastChordFromActive} className="btn-flat" style={{ padding: '0.25rem 0.5rem', fontSize: '0.7rem' }}>
+                Eliminar último acorde
               </button>
             </div>
 
-            {/* Progresión gigante */}
-            <div style={{ display: 'flex', gap: '0.5rem', overflowX: 'auto', padding: '0.25rem 0' }}>
-              {activeSection.chords.map((c, cIdx) => {
-                const isCurrent = isPlaying && currentChordIndex === cIdx
-                return (
-                  <div 
-                    key={cIdx} 
-                    style={{
-                      flex: '1',
-                      minWidth: '90px',
-                      padding: '1rem 0.5rem',
-                      textAlign: 'center',
-                      borderRadius: 'var(--radius-sm)',
-                      background: isCurrent ? 'rgba(37, 99, 235, 0.15)' : 'var(--bg-app)',
-                      border: isCurrent ? '1px solid var(--accent-blue)' : '1px solid var(--border-color)',
-                      position: 'relative'
-                    }}
-                  >
-                    <span style={{ fontSize: '1.25rem', fontWeight: 800, color: isCurrent ? 'white' : 'var(--text-primary)', display: 'block', fontFamily: 'var(--font-mono)' }}>
-                      {c.chord}
-                    </span>
-                    <span style={{ fontSize: '0.6rem', color: 'var(--text-secondary)' }}>{c.beats} pulsos</span>
-                    
-                    {isCurrent && (
-                      <div style={{ display: 'flex', justifyContent: 'center', gap: '3px', marginTop: '0.4rem' }}>
-                        {[0, 1, 2, 3].map((b) => (
-                          <span 
-                            key={b} 
-                            style={{ 
-                              width: '5px', 
-                              height: '5px', 
-                              borderRadius: '50%', 
-                              background: currentBeat === b ? 'var(--accent-green)' : 'var(--text-muted)'
-                            }}
-                          />
-                        ))}
+            {/* Grid Multipista */}
+            <div style={{ display: 'flex', flexDirection: 'column', border: '1px solid var(--border-color)', backgroundColor: 'var(--bg-app)' }}>
+              
+              {/* Cabecera del Grid (Muestra los acordes y el playhead) */}
+              <div style={{ display: 'flex', borderBottom: '1px solid var(--border-color)', backgroundColor: 'var(--bg-panel)' }}>
+                <div style={{ width: '100px', padding: '0.5rem', borderRight: '1px solid var(--border-color)', fontSize: '0.7rem', fontWeight: 'bold', color: 'var(--text-secondary)' }}>
+                  COMPÁS / BEAT
+                </div>
+                <div style={{ flex: 1, display: 'flex', overflowX: 'auto' }}>
+                  {/* Generar las celdas de pulso en horizontal */}
+                  {Array.from({ length: totalBeats }).map((_, beatIdx) => {
+                    // Encontrar qué acorde suena en este beat
+                    let sum = 0
+                    let chordName = ''
+                    for (const c of activeSection.chords) {
+                      if (beatIdx >= sum && beatIdx < sum + c.beats) {
+                        chordName = c.chord
+                        break
+                      }
+                      sum += c.beats
+                    }
+                    const isPlayhead = isPlaying && currentBeat === beatIdx
+
+                    return (
+                      <div 
+                        key={beatIdx} 
+                        style={{
+                          flex: 1,
+                          minWidth: '45px',
+                          textAlign: 'center',
+                          padding: '0.5rem 0',
+                          borderRight: '1px solid rgba(255,255,255,0.03)',
+                          backgroundColor: isPlayhead ? 'rgba(16, 185, 129, 0.2)' : 'transparent',
+                          borderBottom: isPlayhead ? '2px solid var(--accent-green)' : 'none',
+                          fontSize: '0.75rem',
+                          fontFamily: 'var(--font-mono)'
+                        }}
+                      >
+                        <span style={{ fontWeight: 'bold', color: 'white', display: 'block' }}>{chordName}</span>
+                        <span style={{ fontSize: '0.6rem', color: 'var(--text-muted)' }}>{beatIdx + 1}</span>
                       </div>
-                    )}
-                  </div>
-                )
-              })}
+                    )
+                  })}
+                </div>
+              </div>
+
+              {/* Renglon 1: GUITARRA (Prioridad acústica) */}
+              <div style={{ display: 'flex', borderBottom: '1px solid rgba(255,255,255,0.03)' }}>
+                <div style={{ width: '100px', padding: '0.5rem', borderRight: '1px solid var(--border-color)', fontSize: '0.75rem', fontWeight: 'bold', display: 'flex', alignItems: 'center' }}>
+                  🎸 Guitarra
+                </div>
+                <div style={{ flex: 1, display: 'flex' }}>
+                  {Array.from({ length: totalBeats }).map((_, beatIdx) => {
+                    const isPlayhead = isPlaying && currentBeat === beatIdx
+                    const isPlayingInst = instruments.guitar.active && (instruments.guitar.type === 'strum' ? beatIdx % 4 === 0 : true)
+                    
+                    return (
+                      <div 
+                        key={beatIdx}
+                        style={{
+                          flex: 1,
+                          minWidth: '45px',
+                          borderRight: '1px solid rgba(255,255,255,0.03)',
+                          backgroundColor: isPlayingInst 
+                            ? (isPlayhead ? 'rgba(37, 99, 235, 0.4)' : 'rgba(37, 99, 235, 0.15)')
+                            : 'transparent',
+                          borderLeft: isPlayhead ? '1px solid var(--accent-green)' : 'none',
+                          borderRight: isPlayhead ? '1px solid var(--accent-green)' : '1px solid rgba(255,255,255,0.03)',
+                          height: '24px'
+                        }}
+                      />
+                    )
+                  })}
+                </div>
+              </div>
+
+              {/* Renglon 2: PIANO */}
+              <div style={{ display: 'flex', borderBottom: '1px solid rgba(255,255,255,0.03)' }}>
+                <div style={{ width: '100px', padding: '0.5rem', borderRight: '1px solid var(--border-color)', fontSize: '0.75rem', display: 'flex', alignItems: 'center' }}>
+                  🎹 Piano
+                </div>
+                <div style={{ flex: 1, display: 'flex' }}>
+                  {Array.from({ length: totalBeats }).map((_, beatIdx) => {
+                    const isPlayhead = isPlaying && currentBeat === beatIdx
+                    const isPlayingInst = instruments.piano.active
+                    
+                    return (
+                      <div 
+                        key={beatIdx}
+                        style={{
+                          flex: 1,
+                          minWidth: '45px',
+                          borderRight: '1px solid rgba(255,255,255,0.03)',
+                          backgroundColor: isPlayingInst 
+                            ? (isPlayhead ? 'rgba(168, 85, 247, 0.4)' : 'rgba(168, 85, 247, 0.15)')
+                            : 'transparent',
+                          borderLeft: isPlayhead ? '1px solid var(--accent-green)' : 'none',
+                          borderRight: isPlayhead ? '1px solid var(--accent-green)' : '1px solid rgba(255,255,255,0.03)',
+                          height: '24px'
+                        }}
+                      />
+                    )
+                  })}
+                </div>
+              </div>
+
+              {/* Renglon 3: BAJO */}
+              <div style={{ display: 'flex', borderBottom: '1px solid rgba(255,255,255,0.03)' }}>
+                <div style={{ width: '100px', padding: '0.5rem', borderRight: '1px solid var(--border-color)', fontSize: '0.75rem', display: 'flex', alignItems: 'center' }}>
+                  🔊 Bajo
+                </div>
+                <div style={{ flex: 1, display: 'flex' }}>
+                  {Array.from({ length: totalBeats }).map((_, beatIdx) => {
+                    const isPlayhead = isPlaying && currentBeat === beatIdx
+                    const isPlayingInst = instruments.bass.active && (instruments.bass.type === 'roots' ? beatIdx % 2 === 0 : true)
+                    
+                    return (
+                      <div 
+                        key={beatIdx}
+                        style={{
+                          flex: 1,
+                          minWidth: '45px',
+                          borderRight: '1px solid rgba(255,255,255,0.03)',
+                          backgroundColor: isPlayingInst 
+                            ? (isPlayhead ? 'rgba(217, 119, 6, 0.4)' : 'rgba(217, 119, 6, 0.12)')
+                            : 'transparent',
+                          borderLeft: isPlayhead ? '1px solid var(--accent-green)' : 'none',
+                          borderRight: isPlayhead ? '1px solid var(--accent-green)' : '1px solid rgba(255,255,255,0.03)',
+                          height: '24px'
+                        }}
+                      />
+                    )
+                  })}
+                </div>
+              </div>
+
+              {/* Renglon 4: BATERÍA */}
+              <div style={{ display: 'flex' }}>
+                <div style={{ width: '100px', padding: '0.5rem', borderRight: '1px solid var(--border-color)', fontSize: '0.75rem', display: 'flex', alignItems: 'center' }}>
+                  🥁 Batería
+                </div>
+                <div style={{ flex: 1, display: 'flex' }}>
+                  {Array.from({ length: totalBeats }).map((_, beatIdx) => {
+                    const isPlayhead = isPlaying && currentBeat === beatIdx
+                    const isPlayingInst = instruments.drums.active
+                    
+                    return (
+                      <div 
+                        key={beatIdx}
+                        style={{
+                          flex: 1,
+                          minWidth: '45px',
+                          borderRight: '1px solid rgba(255,255,255,0.03)',
+                          backgroundColor: isPlayingInst 
+                            ? (isPlayhead ? 'rgba(16, 185, 129, 0.4)' : 'rgba(16, 185, 129, 0.15)')
+                            : 'transparent',
+                          borderLeft: isPlayhead ? '1px solid var(--accent-green)' : 'none',
+                          borderRight: isPlayhead ? '1px solid var(--accent-green)' : '1px solid rgba(255,255,255,0.03)',
+                          height: '24px'
+                        }}
+                      />
+                    )
+                  })}
+                </div>
+              </div>
+
             </div>
 
-            {/* Añadir acordes manual */}
-            <div>
-              <span style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', display: 'block', marginBottom: '0.25rem' }}>Añadir acorde rápido:</span>
+            {/* Constructor Rápido de Acordes */}
+            <div style={{ marginTop: '0.25rem' }}>
+              <span style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', display: 'block', marginBottom: '0.25rem' }}>Añadir acorde rápido a la sección:</span>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.25rem' }}>
                 {['C', 'G', 'D', 'A', 'E', 'F', 'Am', 'Em', 'Dm', 'Bm', 'F#m', 'Cmaj7', 'Am7', 'G7', 'D7', 'E7'].map((ch) => (
                   <button 
-                    key={ch} 
-                    onClick={() => addChordToActiveSection(ch)}
-                    className="chord-badge badge-interactive"
-                    style={{ fontSize: '0.75rem', padding: '0.2rem 0.5rem' }}
+                    key={ch} onClick={() => addChordToActiveSection(ch)}
+                    className="chord-badge badge-interactive" style={{ fontSize: '0.75rem', padding: '0.2rem 0.5rem' }}
                   >
                     + {ch}
                   </button>
@@ -1194,24 +1112,52 @@ export default function App() {
           </section>
         )}
 
+        {/* Fretboard */}
         <Fretboard 
           keySignature={project.key_signature}
           activeChord={isPlaying ? currentChordName : (activeSection?.chords[0]?.chord || '')}
           capoPosition={project.capo_position}
           onPlayNote={playFretNote}
         />
-        
-        <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center', fontSize: '0.7rem', color: 'var(--text-secondary)' }}>
-          <Info size={12} />
-          <span>Tip: Explícale al chat cómo te sientes y SinfonIA actualizará las progresiones automáticamente.</span>
-        </div>
       </main>
 
-      {/* PANEL DERECHO: MIXER DE INSTRUMENTOS */}
+      {/* 3. PANEL DERECHO: MIXER & ALBUM ART */}
       <aside className="right-sidebar">
         <h2 style={{ fontSize: '1rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.4rem', fontWeight: 700 }}>
           <Sliders size={16} /> Acompañamiento
         </h2>
+
+        {/* Guitarra (Ajustes de Prioridad) */}
+        <div className="instrument-strip" style={{ borderLeft: '2px solid var(--accent-blue)' }}>
+          <div className="instrument-header">
+            <span className="instrument-title" style={{ color: 'var(--accent-blue)' }}>🎸 Guitarra (Acústica)</span>
+            <label className="toggle-switch">
+              <input type="checkbox" checked={instruments.guitar.active} onChange={() => toggleInstrument('guitar')} />
+              <span className="slider-round"></span>
+            </label>
+          </div>
+          <div className="slider-control">
+            <input 
+              type="range" min="-40" max="0" value={instruments.guitar.volume}
+              onChange={(e) => handleVolumeChange('guitar', e.target.value)}
+              className="custom-range" disabled={!instruments.guitar.active}
+            />
+          </div>
+          <div className="slider-control">
+            <div style={{ display: 'flex', gap: '0.2rem', marginTop: '0.2rem' }}>
+              <button 
+                onClick={() => handlePatternChange('guitar', 'strum')} 
+                style={{ flex: 1, fontSize: '0.65rem', padding: '0.2rem', borderRadius: '2px', border: '1px solid var(--border-color)', background: instruments.guitar.type === 'strum' ? 'var(--accent-blue)' : 'transparent', color: 'white', cursor: 'pointer' }}
+                disabled={!instruments.guitar.active}
+              >Rasgueo</button>
+              <button 
+                onClick={() => handlePatternChange('guitar', 'arpeggio')} 
+                style={{ flex: 1, fontSize: '0.65rem', padding: '0.2rem', borderRadius: '2px', border: '1px solid var(--border-color)', background: instruments.guitar.type === 'arpeggio' ? 'var(--accent-blue)' : 'transparent', color: 'white', cursor: 'pointer' }}
+                disabled={!instruments.guitar.active}
+              >Arpegio</button>
+            </div>
+          </div>
+        </div>
 
         {/* Piano */}
         <div className="instrument-strip">
@@ -1223,10 +1169,6 @@ export default function App() {
             </label>
           </div>
           <div className="slider-control">
-            <div className="slider-label">
-              <span>Volumen</span>
-              <span>{instruments.piano.volume} dB</span>
-            </div>
             <input 
               type="range" min="-40" max="0" value={instruments.piano.volume}
               onChange={(e) => handleVolumeChange('piano', e.target.value)}
@@ -1249,28 +1191,6 @@ export default function App() {
           </div>
         </div>
 
-        {/* Guía Acústica */}
-        <div className="instrument-strip">
-          <div className="instrument-header">
-            <span className="instrument-title">🎸 Guía Acústica</span>
-            <label className="toggle-switch">
-              <input type="checkbox" checked={instruments.guitar.active} onChange={() => toggleInstrument('guitar')} />
-              <span className="slider-round"></span>
-            </label>
-          </div>
-          <div className="slider-control">
-            <div className="slider-label">
-              <span>Volumen</span>
-              <span>{instruments.guitar.volume} dB</span>
-            </div>
-            <input 
-              type="range" min="-40" max="0" value={instruments.guitar.volume}
-              onChange={(e) => handleVolumeChange('guitar', e.target.value)}
-              className="custom-range" disabled={!instruments.guitar.active}
-            />
-          </div>
-        </div>
-
         {/* Bajo */}
         <div className="instrument-strip">
           <div className="instrument-header">
@@ -1281,10 +1201,6 @@ export default function App() {
             </label>
           </div>
           <div className="slider-control">
-            <div className="slider-label">
-              <span>Volumen</span>
-              <span>{instruments.bass.volume} dB</span>
-            </div>
             <input 
               type="range" min="-40" max="0" value={instruments.bass.volume}
               onChange={(e) => handleVolumeChange('bass', e.target.value)}
@@ -1310,17 +1226,13 @@ export default function App() {
         {/* Batería */}
         <div className="instrument-strip">
           <div className="instrument-header">
-            <span className="instrument-title">🥁 Percusión</span>
+            <span className="instrument-title">🥁 Percisión</span>
             <label className="toggle-switch">
               <input type="checkbox" checked={instruments.drums.active} onChange={() => toggleInstrument('drums')} />
               <span className="slider-round"></span>
             </label>
           </div>
           <div className="slider-control">
-            <div className="slider-label">
-              <span>Volumen</span>
-              <span>{instruments.drums.volume} dB</span>
-            </div>
             <input 
               type="range" min="-40" max="0" value={instruments.drums.volume}
               onChange={(e) => handleVolumeChange('drums', e.target.value)}
@@ -1342,7 +1254,61 @@ export default function App() {
             </div>
           </div>
         </div>
+
+        <div style={{ flex: 1 }} />
+
+        {/* --- SECCIÓN ART DE PORTADA CON IMAGEN 3 --- */}
+        <div className="instrument-strip" style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', padding: '0.75rem', alignItems: 'center', textAlign: 'center' }}>
+          <span className="instrument-title" style={{ alignSelf: 'flex-start', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+            <ImageIcon size={14} /> Arte de Portada
+          </span>
+          
+          {project && project.cover_art ? (
+            <img 
+              src={project.cover_art} 
+              alt="Portada del Álbum" 
+              style={{ width: '100%', aspectRatio: '1:1', objectFit: 'cover', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-sm)' }} 
+            />
+          ) : (
+            <div style={{ width: '100%', aspectRatio: '1:1', border: '1px dashed var(--border-color)', borderRadius: 'var(--radius-sm)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)', fontSize: '0.75rem', gap: '0.25rem' }}>
+              <ImageIcon size={24} style={{ opacity: 0.3 }} />
+              <span>Sin Portada</span>
+            </div>
+          )}
+
+          <button 
+            onClick={handleGenerateCover} 
+            className="btn-flat" 
+            disabled={isGeneratingArt}
+            style={{ width: '100%', padding: '0.4rem', fontSize: '0.75rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.25rem' }}
+          >
+            <Sparkles size={12} />
+            {isGeneratingArt ? 'Generando...' : 'Generar Portada'}
+          </button>
+        </div>
       </aside>
+
+      {/* --- MODAL PARA EL ANÁLISIS DE GEMINI 3.1 PRO --- */}
+      {isAnalysisModalOpen && (
+        <div className="modal-overlay" onClick={() => setIsAnalysisModalOpen(false)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '650px', maxHeight: '80%', overflowY: 'auto' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border-color)', paddingBottom: '0.5rem' }}>
+              <h2 style={{ fontSize: '1.15rem', color: 'var(--accent-amber)', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                <Sparkles size={16} /> Análisis de Producción Pro (Gemini 3.1 Pro)
+              </h2>
+              <button onClick={() => setIsAnalysisModalOpen(false)} style={{ background: 'transparent', border: 'none', color: 'white', cursor: 'pointer', fontSize: '1.25rem' }}>×</button>
+            </div>
+            
+            <div style={{ padding: '0.5rem 0', fontSize: '0.85rem', lineHeight: '1.6', color: 'var(--text-primary)', whiteSpace: 'pre-wrap' }}>
+              {analysisResult}
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', borderTop: '1px solid var(--border-color)', paddingTop: '0.75rem', marginTop: '0.5rem' }}>
+              <button onClick={() => setIsAnalysisModalOpen(false)} className="btn-primary">Entendido</button>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   )
