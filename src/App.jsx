@@ -113,13 +113,18 @@ export default function App() {
   
   const chatEndRef = useRef(null)
 
+  const [useLocalMode, setUseLocalMode] = useState(() => {
+    return localStorage.getItem('use_local_mode') === 'true'
+  })
+  const isCloudActive = isSupabaseConfigured() && !useLocalMode
+
   // Cargar proyectos al iniciar
   useEffect(() => {
-    if (isSupabaseConfigured()) {
+    if (isCloudActive) {
       setDbStatus('Conectado a Supabase ⚡')
       loadProjectsFromSupabase()
     } else {
-      setDbStatus('Modo Local')
+      setDbStatus(isSupabaseConfigured() ? 'Modo Local (Supabase Desactivado)' : 'Modo Local')
       const localProjs = localStorage.getItem('local_projects_list')
       if (localProjs) {
         setProjectsList(JSON.parse(localProjs))
@@ -128,7 +133,7 @@ export default function App() {
         localStorage.setItem('local_projects_list', JSON.stringify(INITIAL_PROJECTS))
       }
     }
-  }, [])
+  }, [useLocalMode])
 
   // Auto-scroll chat
   useEffect(() => {
@@ -230,7 +235,7 @@ export default function App() {
     audioEngine.setBpm(selectedProj.tempo_bpm)
     handleStop()
     
-    if (isSupabaseConfigured() && selectedProj.id !== 'local-project') {
+    if (isCloudActive && selectedProj.id !== 'local-project') {
       try {
         const { data: secs, error: sErr } = await supabase
           .from('sections')
@@ -239,9 +244,30 @@ export default function App() {
           .order('order_index', { ascending: true })
 
         if (sErr) throw sErr
-        setSections(secs || [])
-        if (secs && secs.length > 0) {
-          setActiveSectionId(secs[0].id)
+        
+        let finalSecs = secs || []
+        if (finalSecs.length === 0) {
+          const initialSections = DEFAULT_SECTIONS_FOR_NEW.map((sec, idx) => ({
+            project_id: selectedProj.id,
+            name: sec.name,
+            order_index: idx,
+            chords: sec.chords,
+            accompaniment: sec.accompaniment
+          }))
+
+          const { data: insertedSecs, error: insErr } = await supabase
+            .from('sections')
+            .insert(initialSections)
+            .select()
+
+          if (!insErr && insertedSecs) {
+            finalSecs = insertedSecs
+          }
+        }
+
+        setSections(finalSecs)
+        if (finalSecs.length > 0) {
+          setActiveSectionId(finalSecs[0].id)
         }
 
         const { data: chat, error: cErr } = await supabase
@@ -259,7 +285,30 @@ export default function App() {
           }
         ])
       } catch (e) {
-        console.error(e)
+        console.error('Error de Supabase, usando almacenamiento local de respaldo:', e)
+        alert(`Aviso: Hubo un problema al conectar con tu base de datos de Supabase (${e.message || e}). Se usarán datos locales temporales para este proyecto.`)
+        
+        // Fallback a almacenamiento local para evitar pantalla rota
+        const localSecs = localStorage.getItem(`local_secs_${selectedProj.id}`)
+        const localChat = localStorage.getItem(`local_chat_${selectedProj.id}`)
+        
+        if (localSecs) {
+          const parsedSecs = JSON.parse(localSecs)
+          setSections(parsedSecs)
+          setActiveSectionId(parsedSecs[0]?.id || '')
+        } else {
+          const initialSecs = DEFAULT_SECTIONS_FOR_NEW.map(s => ({ ...s, id: `${s.id}-${Date.now()}` }))
+          setSections(initialSecs)
+          setActiveSectionId(initialSecs[0].id)
+        }
+
+        setChatHistory(localChat ? JSON.parse(localChat) : [
+          {
+            id: 'welcome',
+            sender: 'assistant',
+            message: 'Modo Local Activado temporalmente debido a un problema con el backend de Supabase.'
+          }
+        ])
       }
     } else {
       const localSecs = localStorage.getItem(`local_secs_${selectedProj.id}`)
@@ -309,7 +358,7 @@ export default function App() {
       updated_at: new Date().toISOString()
     }
 
-    if (isSupabaseConfigured()) {
+    if (isCloudActive) {
       try {
         const { data: newProj, error: pErr } = await supabase
           .from('projects')
@@ -359,7 +408,7 @@ export default function App() {
     e.stopPropagation()
     if (!confirm('¿Deseas borrar este proyecto?')) return
 
-    if (isSupabaseConfigured()) {
+    if (isCloudActive) {
       try {
         const { error } = await supabase
           .from('projects')
@@ -381,7 +430,7 @@ export default function App() {
 
   // Guardar en caliente
   const saveCurrentState = (updatedProj, updatedSecs) => {
-    if (isSupabaseConfigured() && updatedProj.id !== 'local-project') {
+    if (isCloudActive && updatedProj.id !== 'local-project') {
       saveProjectStateToSupabase(updatedProj, updatedSecs)
     } else {
       const updatedList = projectsList.map(p => p.id === updatedProj.id ? { ...updatedProj, updated_at: new Date().toISOString() } : p)
@@ -637,9 +686,24 @@ export default function App() {
             </nav>
           </div>
 
-          <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center', fontSize: '0.65rem', color: 'var(--text-secondary)', padding: '0 0.5rem' }}>
-            <HardDrive size={12} />
-            <span>{dbStatus}</span>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', padding: '0 0.5rem' }}>
+            <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center', fontSize: '0.65rem', color: 'var(--text-secondary)' }}>
+              <HardDrive size={12} />
+              <span>{dbStatus}</span>
+            </div>
+            {isSupabaseConfigured() && (
+              <button 
+                className="btn-flat" 
+                onClick={() => {
+                  const nextMode = !useLocalMode;
+                  setUseLocalMode(nextMode);
+                  localStorage.setItem('use_local_mode', String(nextMode));
+                }}
+                style={{ padding: '0.25rem 0.5rem', fontSize: '0.65rem', width: '100%', textAlign: 'center', cursor: 'pointer' }}
+              >
+                {useLocalMode ? '🔌 Conectar a Supabase' : '📴 Forzar Modo Local'}
+              </button>
+            )}
           </div>
         </aside>
 
