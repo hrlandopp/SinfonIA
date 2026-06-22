@@ -127,7 +127,13 @@ export default function App() {
       setDbStatus(isSupabaseConfigured() ? 'Modo Local (Supabase Desactivado)' : 'Modo Local')
       const localProjs = localStorage.getItem('local_projects_list')
       if (localProjs) {
-        setProjectsList(JSON.parse(localProjs))
+        try {
+          setProjectsList(JSON.parse(localProjs))
+        } catch (e) {
+          console.error('Error parsing local projects, resetting list:', e)
+          setProjectsList(INITIAL_PROJECTS)
+          localStorage.setItem('local_projects_list', JSON.stringify(INITIAL_PROJECTS))
+        }
       } else {
         setProjectsList(INITIAL_PROJECTS)
         localStorage.setItem('local_projects_list', JSON.stringify(INITIAL_PROJECTS))
@@ -293,31 +299,60 @@ export default function App() {
         const localChat = localStorage.getItem(`local_chat_${selectedProj.id}`)
         
         if (localSecs) {
-          const parsedSecs = JSON.parse(localSecs)
-          setSections(parsedSecs)
-          setActiveSectionId(parsedSecs[0]?.id || '')
+          try {
+            const parsedSecs = JSON.parse(localSecs)
+            setSections(parsedSecs)
+            setActiveSectionId(parsedSecs[0]?.id || '')
+          } catch (err) {
+            console.error('Error parsing local sections fallback:', err)
+            const initialSecs = DEFAULT_SECTIONS_FOR_NEW.map(s => ({ ...s, id: `${s.id}-${Date.now()}` }))
+            setSections(initialSecs)
+            setActiveSectionId(initialSecs[0].id)
+          }
         } else {
           const initialSecs = DEFAULT_SECTIONS_FOR_NEW.map(s => ({ ...s, id: `${s.id}-${Date.now()}` }))
           setSections(initialSecs)
           setActiveSectionId(initialSecs[0].id)
         }
 
-        setChatHistory(localChat ? JSON.parse(localChat) : [
-          {
-            id: 'welcome',
-            sender: 'assistant',
-            message: 'Modo Local Activado temporalmente debido a un problema con el backend de Supabase.'
+        if (localChat) {
+          try {
+            setChatHistory(JSON.parse(localChat))
+          } catch (err) {
+            console.error('Error parsing local chat fallback:', err)
+            setChatHistory([
+              {
+                id: 'welcome',
+                sender: 'assistant',
+                message: 'Modo Local Activado temporalmente debido a un problema con el backend de Supabase.'
+              }
+            ])
           }
-        ])
+        } else {
+          setChatHistory([
+            {
+              id: 'welcome',
+              sender: 'assistant',
+              message: 'Modo Local Activado temporalmente debido a un problema con el backend de Supabase.'
+            }
+          ])
+        }
       }
     } else {
       const localSecs = localStorage.getItem(`local_secs_${selectedProj.id}`)
       const localChat = localStorage.getItem(`local_chat_${selectedProj.id}`)
       
       if (localSecs) {
-        const parsedSecs = JSON.parse(localSecs)
-        setSections(parsedSecs)
-        setActiveSectionId(parsedSecs[0]?.id || '')
+        try {
+          const parsedSecs = JSON.parse(localSecs)
+          setSections(parsedSecs)
+          setActiveSectionId(parsedSecs[0]?.id || '')
+        } catch (err) {
+          console.error('Error parsing local sections:', err)
+          const initialSecs = DEFAULT_SECTIONS_FOR_NEW.map(s => ({ ...s, id: `${s.id}-${Date.now()}` }))
+          setSections(initialSecs)
+          setActiveSectionId(initialSecs[0].id)
+        }
       } else {
         const initialSecs = DEFAULT_SECTIONS_FOR_NEW.map(s => ({ ...s, id: `${s.id}-${Date.now()}` }))
         setSections(initialSecs)
@@ -326,7 +361,20 @@ export default function App() {
       }
 
       if (localChat) {
-        setChatHistory(JSON.parse(localChat))
+        try {
+          setChatHistory(JSON.parse(localChat))
+        } catch (err) {
+          console.error('Error parsing local chat:', err)
+          const welcomeMsg = [
+            {
+              id: 'welcome',
+              sender: 'assistant',
+              message: `¡Hola! Bienvenido a tu proyecto local "${selectedProj.name}". ¿Cómo te gustaría empezar a estructurar la guitarra y el acompañamiento?`
+            }
+          ]
+          setChatHistory(welcomeMsg)
+          localStorage.setItem(`local_chat_${selectedProj.id}`, JSON.stringify(welcomeMsg))
+        }
       } else {
         const welcomeMsg = [
           {
