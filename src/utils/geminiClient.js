@@ -183,7 +183,7 @@ const generateCanvasCover = (songName, mood) => {
 
     // Nombre de la canción (texto oscuro para contraste en fondo claro)
     const fontSize = songName.length > 16 ? 26 : songName.length > 10 ? 32 : 38
-    ctx.font = \`bold \${fontSize}px "Inter", "Segoe UI", sans-serif\`
+    ctx.font = `bold ${fontSize}px "Inter", "Segoe UI", sans-serif`
     ctx.fillStyle = '#0f172a' // texto muy oscuro en lugar de blanco
     ctx.fillText(songName, 256, 335)
 
