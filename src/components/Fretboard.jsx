@@ -1,5 +1,6 @@
 import React from 'react'
 import { parseChordNotes } from '../utils/AudioEngine'
+import GuitarChordDiagram from './GuitarChordDiagram'
 
 const STANDARD_TUNING = [64, 59, 55, 50, 45, 40]
 const STRING_NAMES = ['E', 'B', 'G', 'D', 'A', 'E']
@@ -121,6 +122,12 @@ export default function Fretboard({
           </div>
         </div>
       </div>
+
+      {activeChord && (
+        <div style={{ padding: '0 16px 16px', display: 'flex', justifyContent: 'flex-start' }}>
+          <GuitarChordDiagram chordName={activeChord} />
+        </div>
+      )}
 
       <div className="fretboard-scroll-container">
         <div className="fretboard-neck">

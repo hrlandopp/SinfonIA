@@ -15,6 +15,7 @@ import {
 } from './utils/geminiClient'
 import { audioEngine } from './utils/AudioEngine'
 import Fretboard from './components/Fretboard'
+import PianoRoll from './components/PianoRoll'
 
 const INITIAL_PROJECTS = [
   { id: 'local-proj-1', name: 'Balada de Otoño',    tempo_bpm: 85,  key_signature: 'Em', capo_position: 2, mood: 'Melancólico', cover_art: '', updated_at: new Date().toISOString() },
@@ -60,6 +61,9 @@ export default function App() {
   const [geminiTestResult, setGeminiTestResult] = useState('')
   const [isTestingGemini,  setIsTestingGemini]  = useState(false)
   const [useLocalMode,   setUseLocalMode]   = useState(() => localStorage.getItem('use_local_mode') === 'true')
+  const [activeBottomTab, setActiveBottomTab] = useState('fretboard')
+  const [collapsedTimelineTracks, setCollapsedTimelineTracks] = useState({})
+  const [collapsedMixerChannels, setCollapsedMixerChannels] = useState({})
   const chatEndRef = useRef(null)
 
   const isCloudActive = isSupabaseConfigured() && !useLocalMode
@@ -83,6 +87,7 @@ export default function App() {
     const sec = sections.find(s => s.id === activeSectionId)
     if (!sec) return
     audioEngine.setChords(sec.chords || [])
+    audioEngine.setMelody(sec.melody || [])
     setTotalBeats(sec.chords.reduce((a, c) => a + (c.beats || 4), 0))
     if (sec.accompaniment) Object.keys(sec.accompaniment).forEach(k => {
       audioEngine.setPatternType(k, sec.accompaniment[k])
@@ -99,12 +104,13 @@ export default function App() {
   // ── Storage ──────────────────────────────────────────────────────
   const saveLocal = (list) => { setProjectsList(list); localStorage.setItem('local_projects_list', JSON.stringify(list)) }
 
-  const saveState = (proj, secs) => {
-    if (isCloudActive && proj.id !== 'local-project') { saveToSupabase(proj, secs) }
+  const saveState = (proj, secs, chat) => {
+    const chatToSave = chat || chatHistory
+    if (isCloudActive && proj.id !== 'local-project') { saveToSupabase(proj, secs, chatToSave) }
     else {
       saveLocal(projectsList.map(p => p.id === proj.id ? { ...proj, updated_at: new Date().toISOString() } : p))
       localStorage.setItem(`local_secs_${proj.id}`, JSON.stringify(secs))
-      localStorage.setItem(`local_chat_${proj.id}`, JSON.stringify(chatHistory))
+      localStorage.setItem(`local_chat_${proj.id}`, JSON.stringify(chatToSave))
     }
   }
 
@@ -114,11 +120,24 @@ export default function App() {
     catch (e) { console.error(e); setDbStatus('Error en Supabase') }
   }
 
-  const saveToSupabase = async (proj, secs) => {
+  const saveToSupabase = async (proj, secs, chat) => {
     if (!supabase) return
     try {
       await supabase.from('projects').update({ name: proj.name, tempo_bpm: proj.tempo_bpm, key_signature: proj.key_signature, capo_position: proj.capo_position, mood: proj.mood, cover_art: proj.cover_art, updated_at: new Date().toISOString() }).eq('id', proj.id)
-      for (const s of secs) await supabase.from('sections').update({ name: s.name, chords: s.chords, accompaniment: s.accompaniment, order_index: s.order_index }).eq('id', s.id)
+      
+      await supabase.from('sections').delete().eq('project_id', proj.id)
+      const secInserts = secs.map(s => ({
+        project_id: proj.id, name: s.name, order_index: s.order_index, chords: s.chords, accompaniment: s.accompaniment, melody: s.melody || []
+      }))
+      await supabase.from('sections').insert(secInserts)
+
+      if (chat && chat.length > 0) {
+        await supabase.from('chat_history').delete().eq('project_id', proj.id)
+        const chatInserts = chat.map(c => ({
+          project_id: proj.id, sender: c.sender, message: c.message, created_at: c.created_at || new Date().toISOString()
+        }))
+        await supabase.from('chat_history').insert(chatInserts)
+      }
     } catch (e) { console.error(e) }
   }
 
@@ -248,16 +267,14 @@ export default function App() {
             }
           })
         }
-        if(ch.sections?.length){uSecs=ch.sections.map((s,i)=>({id:sections[i]?.id||`sec-ai-${Date.now()}-${i}`,name:s.name,order_index:s.order_index??i,chords:s.chords||[],accompaniment:sections[i]?.accompaniment||{guitar:'strum',piano:'arpeggio',bass:'roots',drums:'basic',strings:'pad',violin:'melody',vibraphone:'chords'}}))}
+        if(ch.sections?.length){uSecs=ch.sections.map((s,i)=>({id:sections[i]?.id||`sec-ai-${Date.now()}-${i}`,name:s.name,order_index:s.order_index??i,chords:s.chords||[],melody:s.melody||sections[i]?.melody||[],accompaniment:sections[i]?.accompaniment||{guitar:'strum',piano:'arpeggio',bass:'roots',drums:'basic',strings:'pad',violin:'melody',vibraphone:'chords'}}))}
         setProject(uProj); setSections(uSecs)
         if(uSecs.length>0&&!uSecs.find(s=>s.id===activeSectionId)) setActiveSectionId(uSecs[0].id)
         const logParts=[ch.tempo_bpm&&`${ch.tempo_bpm} BPM`,ch.key_signature&&`Tono: ${ch.key_signature}`,ch.sections&&`${ch.sections.length} secciones`].filter(Boolean).join(' · ')
         const log={id:`l-${Date.now()}`,sender:'system',message:`Cambios aplicados — ${logParts}`}
-        const final=[...hist,aMsg,log]; setChatHistory(final); saveState(uProj,uSecs)
-        if(!isCloudActive) localStorage.setItem(`local_chat_${project.id}`,JSON.stringify(final))
+        const final=[...hist,aMsg,log]; setChatHistory(final); saveState(uProj,uSecs,final)
       } else {
-        const final=[...hist,aMsg]; setChatHistory(final)
-        if(!isCloudActive) localStorage.setItem(`local_chat_${project.id}`,JSON.stringify(final))
+        const final=[...hist,aMsg]; setChatHistory(final); saveState(project, sections, final)
       }
     } catch(err){ setChatHistory(p=>[...p,{id:`e-${Date.now()}`,sender:'assistant',message:`Error: ${err.message}`}]) }
     finally{setIsLoadingAi(false)}
@@ -576,15 +593,20 @@ export default function App() {
               {key:'vibraphone', label:'Vibráfono', cls:'trk-vibraphone', color:'var(--trk-vibraphone)', note:()=>instruments.vibraphone.active},
             ].map(({key,label,cls,color,note})=>(
               <div key={key} className={`daw-track ${cls}`}>
-                <div className="daw-track-label">
-                  <div className="track-color-dot" style={{background:color}}/>
-                  {label}
+                <div className="daw-track-label" onClick={() => setCollapsedTimelineTracks(p => ({...p, [key]: !p[key]}))} style={{ cursor: 'pointer', display: 'flex', justifyContent: 'space-between' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <div className="track-color-dot" style={{background:color}}/>
+                    {label}
+                  </div>
+                  <span style={{ fontSize: 10, opacity: 0.5, paddingRight: 4 }}>{collapsedTimelineTracks[key] ? '+' : '−'}</span>
                 </div>
-                <div className="daw-track-cells">
-                  {Array.from({length:totalBeats}).map((_,bi)=>(
-                    <div key={bi} className={`daw-cell ${note(bi)?'has-block':''} ${isPlaying&&currentBeat===bi?'beat-active':''}`}/>
-                  ))}
-                </div>
+                {!collapsedTimelineTracks[key] && (
+                  <div className="daw-track-cells">
+                    {Array.from({length:totalBeats}).map((_,bi)=>(
+                      <div key={bi} className={`daw-cell ${note(bi)?'has-block':''} ${isPlaying&&currentBeat===bi?'beat-active':''}`}/>
+                    ))}
+                  </div>
+                )}
               </div>
             ))}
 
@@ -619,16 +641,41 @@ export default function App() {
           </div>
         )}
 
-        {/* ── Fretboard ── */}
-        <div className="fretboard-wrapper">
-          <Fretboard
-            keySignature={project.key_signature}
-            activeChord={isPlaying?currentChord:(activeSection?.chords[0]?.chord||'')}
-            capoPosition={project.capo_position}
-            onPlayNote={playFretNote}
-            currentBeat={currentBeat}
-            isPlaying={isPlaying}
-          />
+        {/* ── Bottom Panel (Fretboard / Piano Roll) ── */}
+        <div style={{ display: 'flex', gap: '8px', padding: '0 24px', marginTop: '16px' }}>
+          <button className={`sec-tab ${activeBottomTab==='fretboard'?'active':''}`} onClick={() => setActiveBottomTab('fretboard')}>Guitarra / Diapasón</button>
+          <button className={`sec-tab ${activeBottomTab==='pianoroll'?'active':''}`} onClick={() => setActiveBottomTab('pianoroll')}>Piano Roll (Melodías)</button>
+        </div>
+
+        <div className="fretboard-wrapper" style={{ marginTop: '0', borderTopLeftRadius: '0' }}>
+          {activeBottomTab === 'fretboard' ? (
+            <Fretboard
+              keySignature={project.key_signature}
+              activeChord={isPlaying?currentChord:(activeSection?.chords[0]?.chord||'')}
+              capoPosition={project.capo_position}
+              onPlayNote={playFretNote}
+              currentBeat={currentBeat}
+              isPlaying={isPlaying}
+            />
+          ) : (
+            <div style={{ padding: '16px' }}>
+              <PianoRoll
+                totalBeats={totalBeats}
+                melody={activeSection?.melody || []}
+                currentBeat={currentBeat}
+                isPlaying={isPlaying}
+                onPlayNote={(note) => {
+                  audioEngine.startContext()
+                  audioEngine.playNote(note, 0.5)
+                }}
+                onMelodyChange={(newMelody) => {
+                  const upd = sections.map(s => s.id === activeSectionId ? { ...s, melody: newMelody } : s)
+                  setSections(upd)
+                  saveState(project, upd)
+                }}
+              />
+            </div>
+          )}
         </div>
       </main>
 
@@ -646,21 +693,30 @@ export default function App() {
           {key:'vibraphone', label:'Vibráfono', cls:'mixer-ch-vibraphone', color:'var(--trk-vibraphone)', patterns:[['chords','Acordes']]},
         ].map(({key,label,cls,color,patterns})=>(
           <div key={key} className={`mixer-channel ${cls}`}>
-            <div className="mixer-channel-header">
-              <span className="mixer-channel-name" style={{color:instruments[key].active?color:'var(--c-text-3)'}}>
-                {label}
-              </span>
-              <label className="toggle-switch">
-                <input type="checkbox" checked={instruments[key].active} onChange={()=>toggleInstrument(key)}/>
-                <span className="slider-round"/>
-              </label>
+            <div className="mixer-channel-header" onClick={() => setCollapsedMixerChannels(p => ({...p, [key]: !p[key]}))} style={{ cursor: 'pointer' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span className="mixer-channel-name" style={{color:instruments[key].active?color:'var(--c-text-3)'}}>
+                  {label}
+                </span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }} onClick={e => e.stopPropagation()}>
+                <label className="toggle-switch">
+                  <input type="checkbox" checked={instruments[key].active} onChange={()=>toggleInstrument(key)}/>
+                  <span className="slider-round"/>
+                </label>
+                <span style={{ fontSize: 10, opacity: 0.5, userSelect: 'none' }}>{collapsedMixerChannels[key] ? '+' : '−'}</span>
+              </div>
             </div>
-            <input type="range" min="-40" max="0" value={instruments[key].volume} onChange={e=>handleVolume(key,e.target.value)} className="custom-range" disabled={!instruments[key].active}/>
-            <div className="pattern-btns">
-              {patterns.map(([pat,lbl])=>(
-                <button key={pat} className={`pat-btn ${instruments[key].type===pat?'pat-active':''}`} onClick={()=>handlePattern(key,pat)} disabled={!instruments[key].active}>{lbl}</button>
-              ))}
-            </div>
+            {!collapsedMixerChannels[key] && (
+              <>
+                <input type="range" min="-40" max="0" value={instruments[key].volume} onChange={e=>handleVolume(key,e.target.value)} className="custom-range" disabled={!instruments[key].active}/>
+                <div className="pattern-btns">
+                  {patterns.map(([pat,lbl])=>(
+                    <button key={pat} className={`pat-btn ${instruments[key].type===pat?'pat-active':''}`} onClick={()=>handlePattern(key,pat)} disabled={!instruments[key].active}>{lbl}</button>
+                  ))}
+                </div>
+              </>
+            )}
           </div>
         ))}
 

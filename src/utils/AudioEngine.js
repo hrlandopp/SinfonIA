@@ -133,6 +133,7 @@ class AudioEngine {
     this.currentBeat = 0
     this.chordIndex = 0
     this.currentChords = []
+    this.currentMelody = []
     
     // 1. GUITARRA
     this.guitarFilter = new Tone.Filter(3000, 'lowpass').toDestination()
@@ -221,6 +222,10 @@ class AudioEngine {
     this.chordIndex = 0
   }
 
+  setMelody(melody) {
+    this.currentMelody = melody || []
+  }
+
   play() {
     if (this.isPlaying) return
     this.isPlaying = true
@@ -253,6 +258,21 @@ class AudioEngine {
 
       cumulativeBeat += durationBeats
     })
+
+    // Programar notas de la melodía personalizada
+    if (this.currentMelody && this.currentMelody.length > 0) {
+      this.currentMelody.forEach(noteObj => {
+        const { note, beat, duration = '8n' } = noteObj
+        const timeOffset = `${beat} * 4n`
+        Tone.Transport.schedule((time) => {
+          if (this.instruments.violin.active) {
+            this.violin.triggerAttackRelease(note, duration, time)
+          } else if (this.instruments.piano.active) {
+            this.piano.triggerAttackRelease(note, duration, time)
+          }
+        }, timeOffset)
+      })
+    }
 
     // Callback de UI: Dispara cada 1 beat (negrilla)
     const beatEventId = Tone.Transport.scheduleRepeat((time) => {
@@ -384,6 +404,8 @@ class AudioEngine {
 
   scheduleViolin(chordName, startBeat, durationBeats) {
     if (!this.instruments.violin.active) return
+    if (this.currentMelody && this.currentMelody.length > 0) return // Si hay melodía personalizada, no tocar la tónica
+
     const notes = parseChordNotes(chordName, 5)
     if (notes.length === 0) return
     // Tocar la tónica de forma melódica larga
