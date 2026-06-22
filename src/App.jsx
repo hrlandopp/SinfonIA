@@ -259,6 +259,11 @@ export default function App() {
           .select()
 
         if (pErr) throw pErr
+        
+        if (!newProj || newProj.length === 0) {
+          throw new Error('Supabase no devolvió los datos del proyecto creado. Esto suele ocurrir cuando el Row Level Security (RLS) está activo y bloquea las inserciones. Ve al editor SQL de Supabase y ejecuta: ALTER TABLE projects DISABLE ROW LEVEL SECURITY; e inténtalo de nuevo.')
+        }
+        
         const createdProj = newProj[0]
 
         // Crear secciones
@@ -280,6 +285,7 @@ export default function App() {
         handleSelectProject(createdProj)
       } catch (e) {
         console.error(e)
+        alert(`No se pudo crear el proyecto en Supabase:\n\n${e.message || 'Error desconocido'}`)
       }
     } else {
       // Guardar en Modo Local

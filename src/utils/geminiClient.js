@@ -29,24 +29,8 @@ export const sendMessageToProducerAI = async (userMessage, chatHistory, projectS
   // Inicializar el SDK oficial de Google Generative AI
   const genAI = new GoogleGenerativeAI(apiKey)
   
-  // Usar el modelo gemini-1.5-flash optimizado para velocidad y formato JSON estructurado
-  const model = genAI.getGenerativeModel({
-    model: 'gemini-1.5-flash',
-    generationConfig: {
-      responseMimeType: 'application/json',
-    }
-  })
-
-  // Formatear el historial para el formato esperado por Gemini API
-  const contents = chatHistory
-    .filter(msg => msg.sender === 'user' || msg.sender === 'assistant')
-    .map(msg => ({
-      role: msg.sender === 'user' ? 'user' : 'model',
-      parts: [{ text: msg.message }]
-    }))
-
-  // Instrucción del sistema
-  const systemInstruction = `
+  // Instrucciones del sistema que guiarán a la IA a comportarse como productor musical
+  const systemInstructionText = `
 Eres SinfonIA, un productor musical experto, compositor y guitarrista profesional que asiste al usuario a crear canciones.
 Tus tareas principales son:
 1. Ayudar al usuario a plasmar sentimientos e ideas en música, sugiriendo progresiones de acordes, tempos (BPM), tonalidades y estructuras melódicas.
@@ -84,11 +68,24 @@ Estado actual del proyecto musical del usuario:
 ${JSON.stringify(projectState, null, 2)}
 `
 
-  // Añadir la pregunta actual del usuario
-  contents.push({
-    role: 'user',
-    parts: [{ text: `${systemInstruction}\n\nMensaje actual del usuario: "${userMessage}"` }]
+  // Configurar el modelo con instrucciones del sistema separadas de los mensajes de chat.
+  // Esto evita enviar dos mensajes seguidos del rol "user" que violen la regla de alternancia de la API de Gemini (user -> model -> user -> model).
+  const model = genAI.getGenerativeModel({
+    model: 'gemini-1.5-flash',
+    systemInstruction: systemInstructionText,
+    generationConfig: {
+      responseMimeType: 'application/json',
+    }
   })
+
+  // Mapear el historial. Ya contiene el último mensaje del usuario (newUserMessage),
+  // por lo que el rol alternará perfectamente de manera natural.
+  const contents = chatHistory
+    .filter(msg => msg.sender === 'user' || msg.sender === 'assistant')
+    .map(msg => ({
+      role: msg.sender === 'user' ? 'user' : 'model',
+      parts: [{ text: msg.message }]
+    }))
 
   try {
     const result = await model.generateContent({ contents })
@@ -99,6 +96,6 @@ ${JSON.stringify(projectState, null, 2)}
     return responseJson
   } catch (error) {
     console.error('Error al generar contenido con Gemini:', error)
-    throw new Error('Error al comunicarte con tu Productor de IA. Revisa tu conexión y tu clave de API.')
+    throw new Error(`Detalles del error: ${error.message || error}`)
   }
 }
