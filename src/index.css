@@ -1,39 +1,40 @@
-/* SinfonIA - Custom Core Design System & Styling */
+/* SinfonIA - Professional DAW / Hardware Synth Design System */
 
 :root {
   --font-heading: 'Outfit', sans-serif;
   --font-body: 'Inter', sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
 
-  /* Color Palette */
-  --bg-primary: #09090b; /* Zinc 950 */
-  --bg-secondary: #18181b; /* Zinc 900 */
-  --bg-tertiary: #27272a; /* Zinc 800 */
-  --bg-card: rgba(24, 24, 27, 0.7);
+  /* Color Palette - Solid Dark Grey predominant backgrounds */
+  --bg-app: #121214;       /* Main background - Very dark grey */
+  --bg-panel: #1a1a1e;     /* Panels - Medium dark grey */
+  --bg-element: #26262b;   /* Active elements - Light grey */
+  --bg-input: #0f0f11;     /* Input fields */
   
-  --border-color: rgba(63, 63, 70, 0.4); /* Zinc 700 with opacity */
-  --border-focus: #6366f1; /* Indigo 500 */
+  /* Borders - Sharp, thin lines */
+  --border-color: #2e2e35;  /* Subtle grey border */
+  --border-focus: #3b82f6;  /* Solid blue focus */
+  --border-active: #10b981; /* Solid green active */
   
-  --text-primary: #fafafa; /* Zinc 50 */
-  --text-secondary: #a1a1aa; /* Zinc 400 */
-  --text-muted: #52525b; /* Zinc 600 */
+  /* Text */
+  --text-primary: #f3f4f6;   /* Cool grey 100 */
+  --text-secondary: #9ca3af; /* Cool grey 400 */
+  --text-muted: #4b5563;     /* Cool grey 600 */
   
-  /* Brand/Vibe Colors */
-  --accent-cyan: #06b6d4;
-  --accent-purple: #a855f7;
-  --accent-indigo: #6366f1;
-  --accent-rose: #f43f5e;
+  /* Accent Colors (Solid, no gradients) */
+  --accent-blue: #2563eb;    /* Professional Cobalt */
+  --accent-green: #10b981;   /* Synth Green */
+  --accent-amber: #d97706;   /* Warm Amber */
+  --accent-red: #ef4444;     /* Warning Red */
   
-  --glow-indigo: rgba(99, 102, 241, 0.15);
-  --glow-cyan: rgba(6, 182, 212, 0.15);
-
-  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
-  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
-  --shadow-glow: 0 0 20px 2px rgba(99, 102, 241, 0.15);
-
-  --radius-sm: 0.375rem;
-  --radius-md: 0.75rem;
-  --radius-lg: 1rem;
+  /* Border Radius - Square / Boxy */
+  --radius-xs: 1px;
+  --radius-sm: 2px;
+  --radius-md: 4px;
+  
+  /* Shadows - Minimal, flat */
+  --shadow-flat: 0 1px 3px rgba(0,0,0,0.3);
+  --shadow-active: 0 0 0 1px var(--accent-blue);
 }
 
 * {
@@ -43,232 +44,345 @@
 }
 
 body {
-  background-color: var(--bg-primary);
+  background-color: var(--bg-app);
   color: var(--text-primary);
   font-family: var(--font-body);
   -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
   overflow: hidden;
   height: 100vh;
 }
 
 h1, h2, h3, h4, h5, h6 {
   font-family: var(--font-heading);
-  font-weight: 600;
-  letter-spacing: -0.02em;
+  font-weight: 700;
+  letter-spacing: -0.01em;
 }
 
-/* Custom Scrollbar */
+/* Custom Scrollbar (Boxy) */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 5px;
+  height: 5px;
 }
 ::-webkit-scrollbar-track {
-  background: var(--bg-primary);
+  background: var(--bg-app);
 }
 ::-webkit-scrollbar-thumb {
-  background: var(--bg-tertiary);
-  border-radius: 3px;
+  background: var(--bg-element);
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--text-muted);
+  background: var(--text-secondary);
 }
 
-/* App Layout */
+/* Layout General */
 .app-container {
-  display: grid;
-  grid-template-columns: 350px 1fr 280px;
+  display: flex;
   height: 100vh;
   width: 100vw;
-  background: radial-gradient(circle at 50% -20%, #1e1b4b 0%, var(--bg-primary) 70%);
+  background-color: var(--bg-app);
+}
+
+/* PANELS - Estilo Modular Cuadrado (Hardware DAW) */
+.daw-panel {
+  background-color: var(--bg-panel);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  padding: 1rem;
+  box-shadow: var(--shadow-flat);
+}
+
+/* --- VISTA: DASHBOARD / MENÚ PRINCIPAL --- */
+.dashboard-layout {
+  display: grid;
+  grid-template-columns: 240px 1fr;
+  width: 100%;
+  height: 100%;
+}
+
+.dashboard-sidebar {
+  background-color: #16161a;
+  border-right: 1px solid var(--border-color);
+  padding: 1.5rem 1rem;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+.dashboard-menu {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-top: 2rem;
+}
+
+.menu-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.65rem 0.85rem;
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--text-secondary);
+  font-weight: 500;
+  font-size: 0.9rem;
+  text-align: left;
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  transition: all 0.15s ease;
+}
+
+.menu-item:hover {
+  color: var(--text-primary);
+  background-color: rgba(255, 255, 255, 0.03);
+}
+
+.menu-item.active {
+  color: var(--text-primary);
+  background-color: var(--bg-element);
+  border-color: var(--border-color);
+  box-shadow: inset 2px 0 0 var(--accent-blue);
+}
+
+.dashboard-content {
+  padding: 2rem;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.projects-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 1.25rem;
+}
+
+.project-card {
+  background-color: var(--bg-panel);
+  border: 1px solid var(--border-color);
+  padding: 1.25rem;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  position: relative;
+  transition: all 0.15s ease;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  height: 160px;
+}
+
+.project-card:hover {
+  border-color: var(--accent-blue);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+  transform: translateY(-1px);
+}
+
+.project-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+}
+
+.project-card-title {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.project-card-meta {
+  display: flex;
+  gap: 0.75rem;
+  margin-top: 0.5rem;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+}
+
+.project-card-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: auto;
+  border-top: 1px solid rgba(255, 255, 255, 0.03);
+  padding-top: 0.75rem;
+}
+
+/* --- VISTA: WORKSPACE / COMPOSITOR --- */
+.editor-layout {
+  display: grid;
+  grid-template-columns: 360px 1fr 280px;
+  width: 100%;
+  height: 100%;
 }
 
 @media (max-width: 1200px) {
-  .app-container {
+  .editor-layout {
     grid-template-columns: 320px 1fr;
     grid-template-rows: 1fr auto;
   }
   .right-sidebar {
     grid-column: 1 / -1;
     height: auto;
+    border-left: none;
+    border-top: 1px solid var(--border-color);
   }
 }
 
-/* Glassmorphism Panel style */
-.glass-panel {
-  background: var(--bg-card);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border: 1px solid var(--border-color);
-  box-shadow: var(--shadow-lg);
-  border-radius: var(--radius-lg);
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.glass-panel:hover {
-  border-color: rgba(99, 102, 241, 0.3);
-  box-shadow: 0 10px 20px -3px rgba(0, 0, 0, 0.2), 0 0 15px 1px rgba(99, 102, 241, 0.05);
-}
-
-/* Left Sidebar - Chat */
+/* Chat Sidebar (Editor) */
 .chat-sidebar {
   display: flex;
   flex-direction: column;
+  background-color: #16161a;
   border-right: 1px solid var(--border-color);
-  background: rgba(12, 12, 16, 0.8);
-  backdrop-filter: blur(20px);
   height: 100vh;
 }
 
 .chat-header {
-  padding: 1.25rem;
+  padding: 1rem;
   border-bottom: 1px solid var(--border-color);
   display: flex;
   align-items: center;
-  gap: 0.75rem;
-}
-
-.logo-gradient {
-  background: linear-gradient(135deg, var(--accent-cyan) 0%, var(--accent-indigo) 50%, var(--accent-purple) 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  font-size: 1.5rem;
-  font-weight: 800;
-  font-family: var(--font-heading);
+  justify-content: space-between;
 }
 
 .chat-messages {
   flex: 1;
   overflow-y: auto;
-  padding: 1.25rem;
+  padding: 1rem;
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: 0.75rem;
 }
 
 .message-bubble {
-  padding: 0.85rem 1rem;
-  border-radius: var(--radius-md);
-  max-width: 85%;
-  line-height: 1.5;
-  font-size: 0.9rem;
-  animation: slideIn 0.25s ease-out forwards;
+  padding: 0.75rem;
+  border-radius: var(--radius-sm);
+  max-width: 90%;
+  line-height: 1.45;
+  font-size: 0.85rem;
 }
 
 .message-user {
-  background: linear-gradient(135deg, var(--accent-indigo) 0%, #4f46e5 100%);
+  background-color: var(--accent-blue);
   color: white;
   align-self: flex-end;
-  border-bottom-right-radius: 2px;
-  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.2);
+  border-bottom-right-radius: 0;
 }
 
 .message-assistant {
-  background: var(--bg-tertiary);
+  background-color: var(--bg-element);
   color: var(--text-primary);
+  border: 1px solid var(--border-color);
   align-self: flex-start;
-  border-bottom-left-radius: 2px;
-  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-bottom-left-radius: 0;
 }
 
 .message-system-log {
-  background: rgba(6, 182, 212, 0.06);
-  border: 1px dashed rgba(6, 182, 212, 0.3);
-  color: var(--accent-cyan);
+  background-color: rgba(217, 119, 6, 0.05);
+  border: 1px solid rgba(217, 119, 6, 0.2);
+  color: var(--accent-amber);
   align-self: center;
   width: 100%;
-  border-radius: var(--radius-sm);
-  padding: 0.5rem 0.75rem;
-  font-family: monospace;
-  font-size: 0.75rem;
-  text-align: left;
+  padding: 0.4rem 0.6rem;
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
 }
 
 .chat-input-area {
-  padding: 1.25rem;
+  padding: 1rem;
   border-top: 1px solid var(--border-color);
   display: flex;
   gap: 0.5rem;
 }
 
+/* Inputs y Botones Planos */
 .chat-input {
   flex: 1;
-  background: var(--bg-primary);
+  background-color: var(--bg-input);
   border: 1px solid var(--border-color);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-sm);
   color: var(--text-primary);
-  padding: 0.75rem 1rem;
+  padding: 0.6rem 0.75rem;
   font-family: var(--font-body);
-  font-size: 0.9rem;
-  transition: all 0.2s ease;
+  font-size: 0.85rem;
+  outline: none;
 }
 
 .chat-input:focus {
-  outline: none;
   border-color: var(--border-focus);
-  box-shadow: 0 0 0 2px var(--glow-indigo);
 }
 
 .btn-primary {
-  background: linear-gradient(135deg, var(--accent-indigo) 0%, var(--accent-purple) 100%);
+  background-color: var(--accent-blue);
   color: white;
   border: none;
-  border-radius: var(--radius-md);
-  padding: 0.75rem 1.25rem;
+  border-radius: var(--radius-sm);
+  padding: 0.6rem 1.1rem;
   font-weight: 600;
+  font-size: 0.85rem;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 0.5rem;
-  transition: all 0.2s ease;
-  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.2);
+  gap: 0.35rem;
+  transition: background-color 0.1s ease;
 }
 
 .btn-primary:hover {
-  filter: brightness(1.1);
-  transform: translateY(-1px);
+  background-color: #1d4ed8;
 }
 
 .btn-primary:disabled {
-  opacity: 0.5;
+  background-color: var(--text-muted);
   cursor: not-allowed;
-  transform: none;
 }
 
-/* Studio Center Panel */
+.btn-flat {
+  background-color: var(--bg-element);
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+  border-radius: var(--radius-sm);
+  padding: 0.5rem 0.8rem;
+  font-size: 0.8rem;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.btn-flat:hover {
+  background-color: var(--border-color);
+}
+
+/* Studio Workspace */
 .studio-workspace {
   display: flex;
   flex-direction: column;
   height: 100vh;
   overflow-y: auto;
-  padding: 1.5rem;
-  gap: 1.5rem;
+  padding: 1.25rem;
+  gap: 1.25rem;
 }
 
-/* Studio Header Controls */
 .workspace-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 1rem 1.25rem;
+  padding: 0.75rem 1rem;
 }
 
 .project-meta-controls {
   display: flex;
-  gap: 1.5rem;
+  gap: 1rem;
   align-items: center;
 }
 
 .control-pill {
-  background: rgba(24, 24, 27, 0.8);
+  background-color: var(--bg-input);
   border: 1px solid var(--border-color);
-  border-radius: 9999px;
-  padding: 0.4rem 1rem;
-  font-size: 0.85rem;
+  border-radius: var(--radius-sm);
+  padding: 0.35rem 0.75rem;
+  font-size: 0.8rem;
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.4rem;
   color: var(--text-secondary);
 }
 
@@ -279,69 +393,64 @@ h1, h2, h3, h4, h5, h6 {
 
 .play-controls {
   display: flex;
-  gap: 0.5rem;
+  gap: 0.35rem;
   align-items: center;
 }
 
 .btn-icon {
-  background: var(--bg-tertiary);
+  background-color: var(--bg-element);
   border: 1px solid var(--border-color);
   color: var(--text-primary);
-  border-radius: 50%;
-  width: 2.75rem;
-  height: 2.75rem;
+  border-radius: var(--radius-sm);
+  width: 2.25rem;
+  height: 2.25rem;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 0.1s ease;
 }
 
 .btn-icon:hover {
-  background: var(--text-muted);
-  border-color: var(--text-secondary);
-  color: white;
+  background-color: var(--border-color);
 }
 
 .btn-icon.active {
-  background: var(--accent-cyan);
-  border-color: var(--accent-cyan);
-  color: black;
-  box-shadow: 0 0 15px var(--accent-cyan);
+  background-color: var(--accent-green);
+  border-color: var(--accent-green);
+  color: #000;
+  box-shadow: none;
 }
 
-/* Timeline Sequencer */
+/* Sequencer Timeline */
 .sequencer-panel {
-  padding: 1.5rem;
+  padding: 1rem 1.25rem;
 }
 
 .sequencer-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-  gap: 1rem;
-  margin-top: 1rem;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 0.75rem;
+  margin-top: 0.75rem;
 }
 
 .section-card {
-  padding: 1rem;
-  border-radius: var(--radius-md);
+  padding: 0.85rem;
+  border-radius: var(--radius-sm);
   border: 1px solid var(--border-color);
-  background: rgba(39, 39, 42, 0.4);
+  background-color: rgba(38, 38, 43, 0.3);
   cursor: pointer;
-  transition: all 0.2s ease;
   position: relative;
-  overflow: hidden;
+  transition: all 0.1s ease;
 }
 
 .section-card:hover {
-  border-color: var(--accent-indigo);
-  transform: translateY(-2px);
+  border-color: var(--accent-blue);
 }
 
 .section-card.active {
-  border-color: var(--accent-cyan);
-  background: rgba(6, 182, 212, 0.08);
-  box-shadow: 0 0 15px rgba(6, 182, 212, 0.1);
+  border-color: var(--accent-blue);
+  background-color: rgba(37, 99, 235, 0.08);
 }
 
 .section-card.active::before {
@@ -349,14 +458,14 @@ h1, h2, h3, h4, h5, h6 {
   position: absolute;
   top: 0;
   left: 0;
-  width: 4px;
+  width: 3px;
   height: 100%;
-  background: var(--accent-cyan);
+  background-color: var(--accent-blue);
 }
 
 .section-title {
   font-weight: 700;
-  font-size: 0.95rem;
+  font-size: 0.85rem;
   margin-bottom: 0.5rem;
   color: var(--text-primary);
   display: flex;
@@ -367,51 +476,37 @@ h1, h2, h3, h4, h5, h6 {
 .section-chords-list {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.35rem;
-  margin-top: 0.5rem;
+  gap: 0.25rem;
+  margin-top: 0.4rem;
 }
 
 .chord-badge {
-  background: var(--bg-tertiary);
-  border: 1px solid rgba(255, 255, 255, 0.05);
-  border-radius: var(--radius-sm);
-  padding: 0.2rem 0.5rem;
-  font-size: 0.75rem;
+  background-color: var(--bg-element);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-xs);
+  padding: 0.15rem 0.4rem;
+  font-size: 0.7rem;
   font-weight: 700;
-  font-family: monospace;
-  color: var(--accent-indigo);
+  font-family: var(--font-mono);
+  color: var(--text-primary);
 }
 
 .chord-badge.active-chord {
-  background: var(--accent-indigo);
+  background-color: var(--accent-amber);
   color: white;
+  border-color: var(--accent-amber);
 }
 
-/* Fretboard CSS */
+/* Fretboard Section (Professional look) */
 .fretboard-panel {
-  padding: 1.5rem;
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-}
-
-.fretboard-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.fretboard-scroll-container {
-  overflow-x: auto;
-  padding-bottom: 1rem;
-  margin-top: 0.5rem;
+  padding: 1.25rem;
 }
 
 .fretboard-neck {
   display: grid;
-  grid-template-rows: repeat(6, 32px); /* 6 strings */
-  background: #272522; /* Wood-like dark color */
-  border: 4px solid #1a1917;
+  grid-template-rows: repeat(6, 28px); /* 6 strings */
+  background-color: #202024;
+  border: 1px solid var(--border-color);
   border-radius: var(--radius-sm);
   position: relative;
   min-width: 900px;
@@ -421,7 +516,6 @@ h1, h2, h3, h4, h5, h6 {
   display: flex;
   align-items: center;
   position: relative;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
 }
 
 .fretboard-string::after {
@@ -429,22 +523,21 @@ h1, h2, h3, h4, h5, h6 {
   position: absolute;
   left: 0;
   width: 100%;
-  background: linear-gradient(180deg, #888, #444);
+  background-color: #55555c;
   z-index: 1;
 }
 
-/* String thickness */
-.string-0::after { height: 1.2px; } /* E high */
-.string-1::after { height: 1.5px; } /* B */
-.string-2::after { height: 1.8px; } /* G */
-.string-3::after { height: 2.2px; } /* D */
-.string-4::after { height: 2.5px; } /* A */
-.string-5::after { height: 3.0px; } /* E low */
+.string-0::after { height: 1px; }
+.string-1::after { height: 1.2px; }
+.string-2::after { height: 1.5px; }
+.string-3::after { height: 1.8px; }
+.string-4::after { height: 2px; }
+.string-5::after { height: 2.5px; }
 
 .fretboard-fret {
   flex: 1;
   height: 100%;
-  border-right: 3px solid #b5a48c; /* Fret wire */
+  border-right: 2px solid #3f3f46; /* Fret wire */
   display: flex;
   justify-content: center;
   align-items: center;
@@ -454,171 +547,155 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .fret-0 {
-  background: #111; /* Nut string area */
-  border-right: 6px solid #e5e5e5;
+  background-color: #121214;
+  border-right: 4px solid #8e8e93;
   min-width: 40px;
 }
 
-/* Fret markers (inlay dots) on frets 3, 5, 7, 9, 12, 15, 17, 19 */
+/* Fret Markers (dots) */
 .fret-marker::before {
   content: '';
   position: absolute;
-  width: 8px;
-  height: 8px;
+  width: 6px;
+  height: 6px;
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.3);
-  bottom: -4px; /* Placed between strings (grid makes it neat) */
-  left: calc(50% - 4px);
+  background-color: #3f3f46;
+  bottom: -3px;
+  left: calc(50% - 3px);
   z-index: 0;
-  pointer-events: none;
 }
 
 .fret-marker-double::before {
   content: '';
   position: absolute;
-  width: 8px;
-  height: 8px;
+  width: 6px;
+  height: 6px;
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.3);
+  background-color: #3f3f46;
   z-index: 0;
-  pointer-events: none;
-  /* Double dots on 12th fret placed in string gaps */
-  box-shadow: 0 -12px 0 rgba(255, 255, 255, 0.3), 0 12px 0 rgba(255, 255, 255, 0.3);
+  box-shadow: 0 -10px 0 #3f3f46, 0 10px 0 #3f3f46;
   top: 50%;
-  left: calc(50% - 4px);
+  left: calc(50% - 3px);
 }
 
+/* Fretboard Note Nodes (Flat Solid Colors) */
 .fret-note-node {
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
+  width: 18px;
+  height: 18px;
+  border-radius: var(--radius-xs); /* Square note nodes! */
   display: flex;
   justify-content: center;
   align-items: center;
-  font-size: 0.7rem;
-  font-weight: 800;
-  color: black;
+  font-size: 0.65rem;
+  font-weight: 700;
+  font-family: var(--font-mono);
+  color: white;
+  border: none;
   cursor: pointer;
   z-index: 10;
-  transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  box-shadow: var(--shadow-flat);
 }
 
 .fret-note-scale {
-  background: rgba(255, 255, 255, 0.85);
-  border: 1.5px solid var(--accent-indigo);
-  transform: scale(0.9);
+  background-color: #3a3a42;
+  color: var(--text-secondary);
+  border: 1px solid var(--border-color);
 }
 
 .fret-note-chord {
-  background: var(--accent-cyan);
-  color: black;
-  box-shadow: 0 0 12px var(--accent-cyan);
-  transform: scale(1.1);
-  border: 1px solid white;
+  background-color: var(--accent-blue);
+  color: white;
 }
 
 .fret-note-root {
-  background: var(--accent-rose);
+  background-color: var(--accent-red);
   color: white;
-  box-shadow: 0 0 12px var(--accent-rose);
-  border: 1.5px solid white;
-  transform: scale(1.1);
 }
 
-/* Capo bar overlay visual */
 .capo-overlay-bar {
   position: absolute;
   top: 0;
   bottom: 0;
-  width: 14px;
-  background: linear-gradient(90deg, #111, #444, #111);
-  border: 1px solid #777;
-  border-radius: 3px;
-  box-shadow: 0 0 8px rgba(0,0,0,0.8);
+  width: 8px;
+  background-color: #f59e0b; /* Solid Amber Capo */
+  border-radius: var(--radius-xs);
   z-index: 20;
-  pointer-events: none;
 }
 
-/* Right Sidebar - Mixer and instruments */
+/* Right Sidebar - Mixer */
 .right-sidebar {
+  background-color: #16161a;
   border-left: 1px solid var(--border-color);
-  background: rgba(12, 12, 16, 0.8);
-  backdrop-filter: blur(20px);
-  padding: 1.5rem;
+  padding: 1.25rem;
   display: flex;
   flex-direction: column;
-  gap: 1.5rem;
+  gap: 1.25rem;
   height: 100vh;
   overflow-y: auto;
 }
 
 .instrument-strip {
-  padding: 1rem;
-  border-radius: var(--radius-md);
+  padding: 0.85rem;
+  border-radius: var(--radius-sm);
   border: 1px solid var(--border-color);
-  background: rgba(39, 39, 42, 0.2);
+  background-color: var(--bg-panel);
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
+  gap: 0.5rem;
 }
 
 .instrument-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  border-bottom: 1px solid rgba(255,255,255,0.03);
+  padding-bottom: 0.35rem;
 }
 
 .instrument-title {
-  font-size: 0.9rem;
+  font-size: 0.8rem;
   font-weight: 700;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
+  font-family: var(--font-heading);
 }
 
-/* Sliders & Switches */
 .slider-control {
   display: flex;
   flex-direction: column;
-  gap: 0.35rem;
+  gap: 0.25rem;
 }
 
 .slider-label {
-  font-size: 0.75rem;
+  font-size: 0.7rem;
   color: var(--text-secondary);
   display: flex;
   justify-content: space-between;
+  font-family: var(--font-mono);
 }
 
+/* Faders (DAW Style flat faders) */
 .custom-range {
   -webkit-appearance: none;
   width: 100%;
-  height: 5px;
-  background: var(--bg-tertiary);
-  border-radius: 5px;
+  height: 4px;
+  background: var(--bg-input);
   outline: none;
 }
 
 .custom-range::-webkit-slider-thumb {
   -webkit-appearance: none;
   appearance: none;
-  width: 14px;
-  height: 14px;
-  border-radius: 50%;
-  background: var(--accent-cyan);
+  width: 12px;
+  height: 12px;
+  background-color: var(--accent-blue);
+  border-radius: 0; /* Square slider handles */
   cursor: pointer;
-  transition: transform 0.1s ease;
-}
-
-.custom-range::-webkit-slider-thumb:hover {
-  transform: scale(1.2);
 }
 
 .toggle-switch {
   position: relative;
   display: inline-block;
-  width: 40px;
-  height: 20px;
+  width: 32px;
+  height: 16px;
 }
 
 .toggle-switch input {
@@ -634,43 +711,39 @@ h1, h2, h3, h4, h5, h6 {
   left: 0;
   right: 0;
   bottom: 0;
-  background-color: var(--bg-tertiary);
-  transition: .3s;
-  border-radius: 20px;
+  background-color: var(--bg-input);
+  transition: .15s;
   border: 1px solid var(--border-color);
 }
 
 .slider-round:before {
   position: absolute;
   content: "";
-  height: 14px;
-  width: 14px;
+  height: 10px;
+  width: 10px;
   left: 2px;
   bottom: 2px;
   background-color: var(--text-secondary);
-  transition: .3s;
-  border-radius: 50%;
+  transition: .15s;
 }
 
 input:checked + .slider-round {
-  background-color: rgba(99, 102, 241, 0.2);
-  border-color: var(--accent-indigo);
+  background-color: rgba(37, 99, 235, 0.2);
 }
 
 input:checked + .slider-round:before {
-  transform: translateX(20px);
-  background-color: var(--accent-indigo);
+  transform: translateX(16px);
+  background-color: var(--accent-blue);
 }
 
-/* Modal setup */
+/* Modals */
 .modal-overlay {
   position: fixed;
   top: 0;
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0,0,0,0.8);
-  backdrop-filter: blur(8px);
+  background-color: rgba(0,0,0,0.85);
   display: flex;
   justify-content: center;
   align-items: center;
@@ -678,26 +751,26 @@ input:checked + .slider-round:before {
 }
 
 .modal-content {
-  background: var(--bg-secondary);
+  background-color: var(--bg-panel);
   border: 1px solid var(--border-color);
-  padding: 2rem;
-  border-radius: var(--radius-lg);
-  max-width: 480px;
+  padding: 1.5rem;
+  border-radius: var(--radius-sm);
+  max-width: 440px;
   width: 90%;
-  box-shadow: var(--shadow-glow);
   display: flex;
   flex-direction: column;
-  gap: 1.25rem;
+  gap: 1rem;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.7);
 }
 
 .form-group {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: 0.35rem;
 }
 
 .form-label {
-  font-size: 0.85rem;
+  font-size: 0.75rem;
   font-weight: 600;
   color: var(--text-secondary);
 }
@@ -706,21 +779,10 @@ input:checked + .slider-round:before {
 @keyframes slideIn {
   from {
     opacity: 0;
-    transform: translateY(10px);
+    transform: translateY(4px);
   }
   to {
     opacity: 1;
     transform: translateY(0);
   }
-}
-
-/* Header action buttons */
-.badge-interactive {
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.badge-interactive:hover {
-  background: var(--bg-tertiary);
-  border-color: var(--accent-cyan);
 }
