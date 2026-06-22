@@ -732,6 +732,13 @@ export default function App() {
                 </button>
               </div>
 
+              {dbStatus.includes('Error') && (
+                <div style={{ padding: '1rem', backgroundColor: 'rgba(239, 68, 68, 0.1)', border: '1px solid var(--accent-red)', color: '#fca5a5', fontSize: '0.85rem', borderRadius: 'var(--radius-sm)', display: 'flex', flexDirection: 'column', gap: '0.5rem', marginTop: '1rem' }}>
+                  <strong>⚠️ Error al conectar con Supabase:</strong>
+                  <span>Es posible que no hayas creado las tablas en tu base de datos de Supabase. Copia el archivo <code>supabase/schema.sql</code> de tu proyecto y ejecútalo en la pestaña "SQL Editor" en el panel web de Supabase. Asegúrate de desactivar el sistema RLS (Row Level Security) para evitar bloqueos de permisos.</span>
+                </div>
+              )}
+
               {projectsList.length === 0 ? (
                 <div style={{ padding: '3rem', textAlign: 'center', border: '1px dashed var(--border-color)', borderRadius: 'var(--radius-md)', color: 'var(--text-secondary)' }}>
                   <Music size={40} style={{ margin: '0 auto 1rem', opacity: 0.5 }} />

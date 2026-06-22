@@ -34,3 +34,10 @@ CREATE TABLE IF NOT EXISTS chat_history (
     message TEXT NOT NULL,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
+
+-- --- IMPORTANTE PARA EVITAR BLOQUEOS DE PERMISOS (RLS) ---
+-- Deshabilitamos el Row Level Security (RLS) para simplificar este prototipo personal
+-- Esto permite que tu cliente web lea y escriba sin requerir sistemas de autenticación complejos.
+ALTER TABLE projects DISABLE ROW LEVEL SECURITY;
+ALTER TABLE sections DISABLE ROW LEVEL SECURITY;
+ALTER TABLE chat_history DISABLE ROW LEVEL SECURITY;

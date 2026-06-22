@@ -1,4 +1,4 @@
-import { GoogleGenAI } from '@google/generative-ai'
+import { GoogleGenerativeAI } from '@google/generative-ai'
 
 // Intentar obtener la clave de la API desde variables de entorno o localStorage
 const getGeminiKey = () => {
@@ -16,6 +16,9 @@ export const saveGeminiKey = (key) => {
 
 /**
  * Envía la conversación y el estado actual del proyecto al Asistente Productor de IA
+ * @param {string} userMessage Mensaje del usuario
+ * @param {Array} chatHistory Historial completo del chat
+ * @param {Object} projectState Estado actual del proyecto
  */
 export const sendMessageToProducerAI = async (userMessage, chatHistory, projectState) => {
   const apiKey = getGeminiKey()
@@ -23,16 +26,10 @@ export const sendMessageToProducerAI = async (userMessage, chatHistory, projectS
     throw new Error('La clave API de Gemini no está configurada. Agrégala en el panel de configuración.')
   }
 
-  // Inicializar Google Gen AI
-  let genAI;
-  try {
-    const { GoogleGenAI: GenAI } = await import('@google/generative-ai')
-    genAI = new GenAI({ apiKey })
-  } catch (e) {
-    const { GoogleGenAI } = await import('@google/generative-ai')
-    genAI = new GoogleGenAI(apiKey)
-  }
-
+  // Inicializar el SDK oficial de Google Generative AI
+  const genAI = new GoogleGenerativeAI(apiKey)
+  
+  // Usar el modelo gemini-1.5-flash optimizado para velocidad y formato JSON estructurado
   const model = genAI.getGenerativeModel({
     model: 'gemini-1.5-flash',
     generationConfig: {
@@ -40,7 +37,7 @@ export const sendMessageToProducerAI = async (userMessage, chatHistory, projectS
     }
   })
 
-  // Formatear el historial para el formato esperado de la API de Gemini
+  // Formatear el historial para el formato esperado por Gemini API
   const contents = chatHistory
     .filter(msg => msg.sender === 'user' || msg.sender === 'assistant')
     .map(msg => ({
@@ -48,6 +45,7 @@ export const sendMessageToProducerAI = async (userMessage, chatHistory, projectS
       parts: [{ text: msg.message }]
     }))
 
+  // Instrucción del sistema
   const systemInstruction = `
 Eres SinfonIA, un productor musical experto, compositor y guitarrista profesional que asiste al usuario a crear canciones.
 Tus tareas principales son:
@@ -86,6 +84,7 @@ Estado actual del proyecto musical del usuario:
 ${JSON.stringify(projectState, null, 2)}
 `
 
+  // Añadir la pregunta actual del usuario
   contents.push({
     role: 'user',
     parts: [{ text: `${systemInstruction}\n\nMensaje actual del usuario: "${userMessage}"` }]
@@ -95,6 +94,7 @@ ${JSON.stringify(projectState, null, 2)}
     const result = await model.generateContent({ contents })
     const responseText = result.response.text()
     
+    // Parsear y devolver el resultado
     const responseJson = JSON.parse(responseText)
     return responseJson
   } catch (error) {
