@@ -1,14 +1,35 @@
 import * as Tone from 'tone'
 
+// ═══════════════════════════════════════════════════════════════════
+// NOTA: Sistema de notas con octavas correctas
+// ═══════════════════════════════════════════════════════════════════
+
 const NOTE_SEMITONES = {
   'C': 0, 'C#': 1, 'Db': 1, 'D': 2, 'D#': 3, 'Eb': 3, 'E': 4, 'F': 5, 'F#': 6, 'Gb': 6, 'G': 7, 'G#': 8, 'Ab': 8, 'A': 9, 'A#': 10, 'Bb': 10, 'B': 11
 }
 
+const ALL_NOTES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
+
+// Convertir nota con octava (ej: "C4") a MIDI
+export const noteToMidi = (noteName) => {
+  const match = noteName.match(/([A-G]#?)(\d)/)
+  if (!match) return null
+  const [_, note, octave] = match
+  const semitone = NOTE_SEMITONES[note]
+  return semitone + (parseInt(octave) + 1) * 12
+}
+
+// Convertir MIDI a nota con octava
+export const midiToNote = (midi) => {
+  const octave = Math.floor(midi / 12) - 1
+  const semitone = midi % 12
+  return `${ALL_NOTES[semitone]}${octave}`
+}
+
 const semitoneToNote = (semitone, octave) => {
-  const notes = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
   const index = ((semitone % 12) + 12) % 12
   const extraOctave = Math.floor(semitone / 12)
-  return `${notes[index]}${octave + extraOctave}`
+  return `${ALL_NOTES[index]}${octave + extraOctave}`
 }
 
 /**
@@ -52,9 +73,14 @@ const GUITAR_VOICINGS = {
   'F#': ['F#2', 'C#3', 'F#3', 'A#3', 'C#4', 'F#4']
 }
 
+/**
+ * Genera notas de un acorde con octava base específica
+ * Respeta octavas y genera voicing musical coherente
+ */
 export const parseChordNotes = (chordName, baseOctave = 3) => {
   if (!chordName) return []
   
+  // Parsear raíz del acorde (ej: "C", "C#", "Db")
   let root = chordName.substring(0, 1)
   let rest = chordName.substring(1)
   
@@ -66,10 +92,11 @@ export const parseChordNotes = (chordName, baseOctave = 3) => {
   const rootSemitone = NOTE_SEMITONES[root]
   if (rootSemitone === undefined) return []
   
+  // Definir intervalos del acorde
   let intervals = [0, 4, 7] // Mayor
   
   if (rest === 'm' || rest === 'min' || rest.startsWith('m-') || rest.startsWith('min-')) {
-    intervals = [0, 3, 7]
+    intervals = [0, 3, 7] // Menor
   } else if (rest === 'maj7' || rest === 'M7') {
     intervals = [0, 4, 7, 11]
   } else if (rest === 'm7' || rest === 'min7') {
@@ -104,7 +131,7 @@ export const getGuitarVoicing = (chordName) => {
   if (notes.length === 0) return []
   
   const root = notes[0]
-  const rootMidi = Tone.Frequency(root).toMidi()
+  const rootMidi = noteToMidi(root)
   
   // Construir acorde distribuido en el diapasón (Tónica baja, quinta, tónica octava, tercera, quinta alta)
   const voicingMidi = [
@@ -115,245 +142,331 @@ export const getGuitarVoicing = (chordName) => {
     rootMidi + 7   // Quinta alta
   ]
   
-  return voicingMidi.map(midi => Tone.Frequency(midi, 'midi').toNote())
+  return voicingMidi.map(midi => midiToNote(midi))
 }
+
+// ═══════════════════════════════════════════════════════════════════
+// MOTOR DE SONIDO: Sincronización temporal y generación de audio
+// ═══════════════════════════════════════════════════════════════════
 
 class AudioEngine {
   constructor() {
     this.isPlaying = false
     this.bpm = 120
+    this.currentTime = 0
+    this.currentBeat = 0
+    this.chordIndex = 0
+    this.currentChords = []
     
-    // --- EFECTOS Y FILTROS PARA UN SONIDO REALISTA ---
-    // Filtro para guitarra (recorta agudos molestos, simula madera/cuerpo)
-    this.guitarFilter = new Tone.Filter(1500, 'lowpass').toDestination()
-    
-    // Filtro para piano (Rhodes cálido)
-    this.pianoFilter = new Tone.Filter(900, 'lowpass').toDestination()
-    
-    // Filtro para bajo (recorta agudos, sub-bass redondo)
-    this.bassFilter = new Tone.Filter(180, 'lowpass').toDestination()
-
-    // --- SINTETIZADORES ---
-    // 1. GUITARRA (Pluck acústico con prioridad)
+    // --- INSTRUMENTOS ---
+    // 1. GUITARRA (Pluck acústico realista)
+    this.guitarFilter = new Tone.Filter(3000, 'lowpass').toDestination()
     this.guitar = new Tone.PolySynth(Tone.Synth, {
       oscillator: { type: 'triangle' },
       envelope: {
-        attack: 0.002, // Ataque inmediato del plectro/uña
-        decay: 1.2,    // Resonancia de la caja
-        sustain: 0.05,
-        release: 0.5
+        attack: 0.005,
+        decay: 1.0,
+        sustain: 0.1,
+        release: 0.6
       }
     }).connect(this.guitarFilter)
-    this.guitar.volume.value = -6 // Prioridad de volumen
+    this.guitar.volume.value = -6
 
-    // 2. PIANO (Acompañamiento Rhodes suave)
+    // 2. PIANO (Acompañamiento suave)
+    this.pianoFilter = new Tone.Filter(1200, 'lowpass').toDestination()
     this.piano = new Tone.PolySynth(Tone.Synth, {
       oscillator: { type: 'sine' },
       envelope: {
-        attack: 0.04,  // Ataque suave de martillo
-        decay: 1.5,
-        sustain: 0.2,
-        release: 1.5
+        attack: 0.05,
+        decay: 1.2,
+        sustain: 0.15,
+        release: 1.0
       }
     }).connect(this.pianoFilter)
-    this.piano.volume.value = -12
+    this.piano.volume.value = -14
 
-    // 3. BAJO (Fender Jazz Bass sintetizado)
+    // 3. BAJO (Mono synth para bajo coherente)
+    this.bassFilter = new Tone.Filter(250, 'lowpass').toDestination()
     this.bass = new Tone.MonoSynth({
-      oscillator: { type: 'triangle' },
+      oscillator: { type: 'sine' },
       envelope: {
-        attack: 0.02,
-        decay: 0.4,
-        sustain: 0.8,
-        release: 0.8
+        attack: 0.01,
+        decay: 0.3,
+        sustain: 0.6,
+        release: 0.5
       }
     }).connect(this.bassFilter)
-    this.bass.volume.value = -8
+    this.bass.volume.value = -10
 
-    // 4. BATERÍA (Bombo, Caja y Platillo)
+    // 4. BATERÍA
     this.kick = new Tone.MembraneSynth().toDestination()
     this.kick.volume.value = -8
     
     this.hihat = new Tone.MetalSynth({
       envelope: {
         attack: 0.001,
-        decay: 0.04,
-        release: 0.04
+        decay: 0.05,
+        release: 0.05
       }
     }).toDestination()
-    this.hihat.volume.value = -22
+    this.hihat.volume.value = -20
     
     this.snare = new Tone.NoiseSynth({
       noise: { type: 'white' },
       envelope: {
         attack: 0.001,
-        decay: 0.08,
+        decay: 0.1,
         sustain: 0
       }
     }).toDestination()
-    this.snare.volume.value = -16
+    this.snare.volume.value = -14
 
-    this.currentChords = []
-    this.currentBeat = 0
-    this.chordIndex = 0
-    
+    // --- CONFIGURACIÓN DE INSTRUMENTOS ---
     this.instruments = {
-      guitar: { active: true, volume: -6, type: 'strum' }, // Prioridad activa por defecto
-      piano: { active: true, volume: -12, type: 'arpeggio' },
-      bass: { active: true, volume: -8, type: 'roots' },
-      drums: { active: true, volume: -12, type: 'basic' }
+      guitar: { active: true, volume: -6, type: 'strum' },
+      piano: { active: true, volume: -14, type: 'arpeggio' },
+      bass: { active: true, volume: -10, type: 'roots' },
+      drums: { active: true, volume: -8, type: 'basic' }
     }
 
+    // --- CALLBACKS ---
     this.onBeatCallback = null
-    this.setupTransport()
+    this.beatSchedules = [] // Track de eventos programados
   }
 
   async startContext() {
     await Tone.start()
   }
 
-  setupTransport() {
-    Tone.Transport.cancel()
-    
-    // Corcheas (8n) para soportar arpegios y subdivisión
-    Tone.Transport.scheduleRepeat((time) => {
-      if (this.currentChords.length === 0) return
-
-      let totalBeats = 0
-      let targetChord = null
-      let targetIndex = -1
-      
-      const currentQuarterBeat = Math.floor(this.currentBeat)
-
-      for (let i = 0; i < this.currentChords.length; i++) {
-        const c = this.currentChords[i]
-        const duration = c.beats || 4
-        if (currentQuarterBeat >= totalBeats && currentQuarterBeat < totalBeats + duration) {
-          targetChord = c.chord
-          targetIndex = i
-          break
-        }
-        totalBeats += duration
-      }
-
-      // Loop al final de la progresión
-      if (currentQuarterBeat >= totalBeats) {
-        this.currentBeat = 0
-        this.chordIndex = 0
-        targetChord = this.currentChords[0]?.chord || null
-        targetIndex = 0
-      } else {
-        this.chordIndex = targetIndex
-      }
-
-      const isQuarterBeat = this.currentBeat % 1 === 0
-      const subBeatIndex = Math.floor(this.currentBeat * 2) % 8
-
-      if (targetChord) {
-        this.triggerAccompaniment(targetChord, subBeatIndex, time)
-      }
-
-      // Notificar al frontend en cada beat completo (negra)
-      if (isQuarterBeat && this.onBeatCallback) {
-        // Retornamos el beat global acumulado de la sección actual
-        this.onBeatCallback(currentQuarterBeat, this.chordIndex, targetChord, totalBeats)
-      }
-
-      this.currentBeat += 0.5
-    }, '8n')
+  /**
+   * Calcula la duración en segundos de cada beat
+   */
+  beatToSeconds(beats) {
+    return (beats * 60) / this.bpm
   }
 
-  triggerAccompaniment(chordName, subBeat, time) {
-    const guitarNotes = getGuitarVoicing(chordName)
-    const pianoNotes = parseChordNotes(chordName, 3)
-    const bassRoot = parseChordNotes(chordName, 2)[0]
-    
-    // --- 1. GUITARRA (La prioridad acústica) ---
-    if (this.instruments.guitar.active && guitarNotes.length > 0) {
-      const type = this.instruments.guitar.type
-      
-      if (type === 'strum' && subBeat === 0) {
-        // Rasgueo hacia abajo: pequeño retraso acumulativo entre cuerdas
-        guitarNotes.forEach((note, i) => {
-          this.guitar.triggerAttackRelease(note, '2n', time + (i * 0.025))
-        })
-      } else if (type === 'arpeggio') {
-        // Arpegiador de guitarra en corcheas (tocando una cuerda cada beat)
-        const noteIdx = subBeat % guitarNotes.length
-        this.guitar.triggerAttackRelease(guitarNotes[noteIdx], '4n', time)
-      }
-    }
-
-    // --- 2. PIANO ---
-    if (this.instruments.piano.active && pianoNotes.length > 0) {
-      const type = this.instruments.piano.type
-      
-      if (type === 'chord' && subBeat === 0) {
-        // Acordes en bloque al inicio
-        this.piano.triggerAttackRelease(pianoNotes, '2n', time)
-      } else if (type === 'arpeggio') {
-        // Arpegio invertido de piano para no chocar con la guitarra
-        const noteIdx = (7 - subBeat) % pianoNotes.length
-        this.piano.triggerAttackRelease(pianoNotes[noteIdx], '8n', time)
-      }
-    }
-
-    // --- 3. BAJO ---
-    if (this.instruments.bass.active && bassRoot) {
-      const type = this.instruments.bass.type
-      
-      if (type === 'roots' && (subBeat === 0 || subBeat === 4)) {
-        this.bass.triggerAttackRelease(bassRoot, '4n', time)
-      } else if (type === 'walking') {
-        // Una nota por pulso (en negras: subBeats 0, 2, 4, 6)
-        if (subBeat % 2 === 0) {
-          const beatIndex = subBeat / 2
-          let bassNote = bassRoot
-          
-          if (beatIndex === 1 && pianoNotes[1]) bassNote = pianoNotes[1] // Tercera del acorde
-          if (beatIndex === 2 && pianoNotes[2]) bassNote = pianoNotes[2] // Quinta del acorde
-          if (beatIndex === 3) {
-            // Nota de aproximación cromática a la siguiente tónica
-            const rootMidi = Tone.Frequency(bassRoot).toMidi()
-            bassNote = Tone.Frequency(rootMidi + 1, 'midi').toNote()
-          }
-          this.bass.triggerAttackRelease(bassNote, '8n', time)
-        }
-      }
-    }
-
-    // --- 4. BATERÍA ---
-    if (this.instruments.drums.active) {
-      const type = this.instruments.drums.type
-      
-      if (type === 'basic') {
-        // Patrón Pop/Rock estándar: Bombo en 1 y 3, Caja en 2 y 4, contratiempo constante
-        if (subBeat === 0 || subBeat === 4) {
-          this.kick.triggerAttackRelease('C1', '8n', time)
-        }
-        if (subBeat === 2 || subBeat === 6) {
-          this.snare.triggerAttack(time)
-        }
-        this.hihat.triggerAttack(time)
-      } else if (type === 'metronome') {
-        // Click simple en negras
-        if (subBeat % 2 === 0) {
-          const beatIndex = subBeat / 2
-          this.kick.triggerAttackRelease(beatIndex === 0 ? 'F2' : 'C2', '16n', time)
-        }
-      }
-    }
-  }
-
+  /**
+   * Establece los acordes a reproducir
+   */
   setChords(chords) {
     this.currentChords = chords
-  }
-
-  play() {
-    this.isPlaying = true
     this.currentBeat = 0
     this.chordIndex = 0
-    Tone.Transport.start()
+  }
+
+  /**
+   * REPRODUCCIÓN PRINCIPAL: Sincronización correcta de instrumentos
+   */
+  play() {
+    if (this.isPlaying) return
+    
+    this.isPlaying = true
+    this.currentTime = 0
+    this.currentBeat = 0
+    this.chordIndex = 0
+    
+    // Cancelar eventos previos
+    Tone.Transport.cancel()
+    
+    // Programar reproducción de la secuencia
+    this.scheduleSequence()
+    
+    Tone.Transport.bpm.value = this.bpm
+    Tone.Transport.start('+0')
+  }
+
+  /**
+   * Programa todos los eventos de audio con timing preciso
+   */
+  scheduleSequence() {
+    if (this.currentChords.length === 0) return
+
+    let cumulativeBeat = 0
+    let chordIdx = 0
+
+    // Por cada acorde en la secuencia
+    for (const chordObj of this.currentChords) {
+      const chordName = chordObj.chord
+      const durationBeats = chordObj.beats || 4
+      const beatDuration = this.beatToSeconds(durationBeats)
+
+      // GUITARRA: rasgueo al inicio del acorde
+      this.scheduleGuitar(chordName, cumulativeBeat, durationBeats, chordIdx)
+
+      // PIANO: arpegio a lo largo del acorde
+      this.schedulePiano(chordName, cumulativeBeat, durationBeats, chordIdx)
+
+      // BAJO: patrón rítmico
+      this.scheduleBass(chordName, cumulativeBeat, durationBeats, chordIdx)
+
+      // BATERÍA: pulso constante
+      this.scheduleDrums(cumulativeBeat, durationBeats, chordIdx)
+
+      // Notificar cambio de acorde
+      const seconds = this.beatToSeconds(cumulativeBeat)
+      Tone.Transport.scheduleOnce((time) => {
+        if (this.onBeatCallback) {
+          this.onBeatCallback(cumulativeBeat, chordIdx, chordName, this.currentChords.length * 4)
+        }
+      }, '+' + seconds)
+
+      cumulativeBeat += durationBeats
+      chordIdx++
+    }
+
+    // Loop: volver a empezar
+    const totalBeats = cumulativeBeat
+    const loopSeconds = this.beatToSeconds(totalBeats)
+    Tone.Transport.scheduleRepeat((time) => {
+      this.currentBeat = 0
+      this.chordIndex = 0
+      this.scheduleSequence()
+    }, loopSeconds)
+  }
+
+  /**
+   * GUITARRA: Rasgueo coordinado con voicing realista
+   */
+  scheduleGuitar(chordName, startBeat, durationBeats, chordIdx) {
+    if (!this.instruments.guitar.active) return
+
+    const voicing = getGuitarVoicing(chordName)
+    if (voicing.length === 0) return
+
+    const seconds = this.beatToSeconds(startBeat)
+
+    if (this.instruments.guitar.type === 'strum') {
+      // Rasgueo descendente: cada cuerda con pequeño retraso
+      voicing.forEach((note, i) => {
+        const delay = seconds + (i * 0.05)
+        Tone.Transport.scheduleOnce((time) => {
+          this.guitar.triggerAttackRelease(note, '0.6', time)
+        }, '+' + delay)
+      })
+    } else if (this.instruments.guitar.type === 'arpeggio') {
+      // Arpegio: toca una nota cada 16avo
+      for (let beat = 0; beat < durationBeats; beat += 0.25) {
+        const noteIdx = Math.floor((beat / 0.25) % voicing.length)
+        const noteSeconds = this.beatToSeconds(startBeat + beat)
+        Tone.Transport.scheduleOnce((time) => {
+          this.guitar.triggerAttackRelease(voicing[noteIdx], '0.25', time)
+        }, '+' + noteSeconds)
+      }
+    }
+  }
+
+  /**
+   * PIANO: Arpegio invertido suave
+   */
+  schedulePiano(chordName, startBeat, durationBeats, chordIdx) {
+    if (!this.instruments.piano.active) return
+
+    const notes = parseChordNotes(chordName, 3)
+    if (notes.length === 0) return
+
+    const seconds = this.beatToSeconds(startBeat)
+
+    if (this.instruments.piano.type === 'arpeggio') {
+      // Arpegio en corcheas (8avo)
+      for (let beat = 0; beat < durationBeats; beat += 0.5) {
+        const noteIdx = Math.floor((beat / 0.5) % notes.length)
+        const noteSeconds = this.beatToSeconds(startBeat + beat)
+        Tone.Transport.scheduleOnce((time) => {
+          this.piano.triggerAttackRelease(notes[noteIdx], '0.4', time)
+        }, '+' + noteSeconds)
+      }
+    } else if (this.instruments.piano.type === 'chord') {
+      // Acorde completo al inicio
+      Tone.Transport.scheduleOnce((time) => {
+        this.piano.triggerAttackRelease(notes, '1.5', time)
+      }, '+' + seconds)
+    }
+  }
+
+  /**
+   * BAJO: Patrón rítmico sincronizado
+   */
+  scheduleBass(chordName, startBeat, durationBeats, chordIdx) {
+    if (!this.instruments.bass.active) return
+
+    const notes = parseChordNotes(chordName, 2) // Octava más baja
+    if (notes.length === 0) return
+
+    const bassRoot = notes[0]
+
+    if (this.instruments.bass.type === 'roots') {
+      // Tónica en cada beat
+      for (let beat = 0; beat < durationBeats; beat += 1) {
+        const seconds = this.beatToSeconds(startBeat + beat)
+        Tone.Transport.scheduleOnce((time) => {
+          this.bass.triggerAttackRelease(bassRoot, '0.4', time)
+        }, '+' + seconds)
+      }
+    } else if (this.instruments.bass.type === 'walking') {
+      // Patrón walking bass
+      for (let beat = 0; beat < durationBeats; beat += 1) {
+        let bassNote = bassRoot
+        const beatInChord = beat % 4
+        
+        if (beatInChord === 1 && notes[1]) bassNote = notes[1]
+        if (beatInChord === 2 && notes[2]) bassNote = notes[2]
+        if (beatInChord === 3) {
+          // Aproximación cromática
+          const rootMidi = noteToMidi(bassRoot)
+          bassNote = midiToNote(rootMidi + 1)
+        }
+
+        const seconds = this.beatToSeconds(startBeat + beat)
+        Tone.Transport.scheduleOnce((time) => {
+          this.bass.triggerAttackRelease(bassNote, '0.35', time)
+        }, '+' + seconds)
+      }
+    }
+  }
+
+  /**
+   * BATERÍA: Pulso rítmico regular
+   */
+  scheduleDrums(startBeat, durationBeats, chordIdx) {
+    if (!this.instruments.drums.active) return
+
+    if (this.instruments.drums.type === 'basic') {
+      // Patrón pop/rock: kick-snare-kick-snare
+      for (let beat = 0; beat < durationBeats; beat += 1) {
+        const beatInBar = beat % 4
+        const seconds = this.beatToSeconds(startBeat + beat)
+
+        // Kick en beats 0 y 2
+        if (beatInBar === 0 || beatInBar === 2) {
+          Tone.Transport.scheduleOnce((time) => {
+            this.kick.triggerAttackRelease('C1', '0.1', time)
+          }, '+' + seconds)
+        }
+
+        // Snare en beats 1 y 3
+        if (beatInBar === 1 || beatInBar === 3) {
+          Tone.Transport.scheduleOnce((time) => {
+            this.snare.triggerAttack(time)
+          }, '+' + seconds)
+        }
+
+        // Hi-hat en cada beat
+        Tone.Transport.scheduleOnce((time) => {
+          this.hihat.triggerAttack(time)
+        }, '+' + seconds)
+      }
+    } else if (this.instruments.drums.type === 'metronome') {
+      // Metrónomo simple
+      for (let beat = 0; beat < durationBeats; beat += 1) {
+        const beatInBar = beat % 4
+        const seconds = this.beatToSeconds(startBeat + beat)
+
+        Tone.Transport.scheduleOnce((time) => {
+          const pitch = beatInBar === 0 ? 'F2' : 'C2'
+          this.kick.triggerAttackRelease(pitch, '0.05', time)
+        }, '+' + seconds)
+      }
+    }
   }
 
   pause() {
@@ -364,26 +477,28 @@ class AudioEngine {
   stop() {
     this.isPlaying = false
     Tone.Transport.stop()
+    Tone.Transport.cancel()
     this.currentBeat = 0
     this.chordIndex = 0
   }
 
   setBpm(newBpm) {
-    this.bpm = newBpm
-    Tone.Transport.bpm.value = newBpm
+    this.bpm = Math.max(40, Math.min(300, newBpm)) // Limitar 40-300 BPM
+    Tone.Transport.bpm.value = this.bpm
   }
 
   setVolume(instrument, dbVolume) {
-    if (this.instruments[instrument]) {
-      this.instruments[instrument].volume = dbVolume
-      if (instrument === 'guitar' && this.guitar) this.guitar.volume.value = dbVolume
-      if (instrument === 'piano' && this.piano) this.piano.volume.value = dbVolume
-      if (instrument === 'bass' && this.bass) this.bass.volume.value = dbVolume
-      if (instrument === 'drums') {
-        this.kick.volume.value = dbVolume + 4
-        this.hihat.volume.value = dbVolume - 10
-        this.snare.volume.value = dbVolume - 4
-      }
+    if (!this.instruments[instrument]) return
+
+    this.instruments[instrument].volume = dbVolume
+
+    if (instrument === 'guitar') this.guitar.volume.value = dbVolume
+    if (instrument === 'piano') this.piano.volume.value = dbVolume
+    if (instrument === 'bass') this.bass.volume.value = dbVolume
+    if (instrument === 'drums') {
+      this.kick.volume.value = dbVolume + 2
+      this.hihat.volume.value = dbVolume - 12
+      this.snare.volume.value = dbVolume - 6
     }
   }
 
