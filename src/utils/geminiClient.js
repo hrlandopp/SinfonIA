@@ -70,8 +70,9 @@ ${JSON.stringify(projectState, null, 2)}
 
   // Configurar el modelo con instrucciones del sistema separadas de los mensajes de chat.
   // Esto evita enviar dos mensajes seguidos del rol "user" que violen la regla de alternancia de la API de Gemini (user -> model -> user -> model).
+  // Usar el modelo gemini-3.5-flash que es el modelo actual recomendado
   const model = genAI.getGenerativeModel({
-    model: 'gemini-1.5-flash',
+    model: 'gemini-3.5-flash',
     systemInstruction: systemInstructionText,
     generationConfig: {
       responseMimeType: 'application/json',
