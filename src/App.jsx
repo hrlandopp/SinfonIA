@@ -66,6 +66,25 @@ export default function App() {
 
   const { play, stop, playNote, playChord } = useAudioEngine(masterJson)
 
+  // ── SINFONIA PRO: Nuevos Estados ──
+  const [focusedZone, setFocusedZone] = useState('canvas')
+  const [activeMidiTrack, setActiveMidiTrack] = useState(null)
+  const [audioPerf, setAudioPerf] = useState({ cpu: 12.4, memory: 45 })
+
+  useEffect(() => {
+    if (!isPlaying) {
+      setAudioPerf({ cpu: 2.1, memory: 45 })
+      return
+    }
+    const interval = setInterval(() => {
+      setAudioPerf({ 
+        cpu: (12 + Math.random() * 8).toFixed(1), 
+        memory: (45 + Math.random() * 2).toFixed(1) 
+      })
+    }, 300)
+    return () => clearInterval(interval)
+  }, [isPlaying])
+
   const [currentView,    setCurrentView]    = useState('dashboard')
   const [activeTab,      setActiveTab]      = useState('projects')
   const [projectsList,   setProjectsList]   = useState([])
@@ -328,6 +347,16 @@ export default function App() {
   const updateCapo = (v) => { const val=Math.min(12,Math.max(0,parseInt(v)||0)); const u={...project, capo_position: val}; setProject(u); saveState(u, sections) }
 
   // ── Mixer ────────────────────────────────────────────────────────
+  const handleToggleMute = (trackId) => {
+    setMasterJson(prev => ({ ...prev, tracks: prev.tracks.map(t => t.id === trackId ? { ...t, mute: !t.mute } : t) }))
+  }
+  const handleToggleSolo = (trackId) => {
+    setMasterJson(prev => ({ ...prev, tracks: prev.tracks.map(t => t.id === trackId ? { ...t, solo: !t.solo } : t) }))
+  }
+  const handleTrackVolume = (trackId, vol) => {
+    setMasterJson(prev => ({ ...prev, tracks: prev.tracks.map(t => t.id === trackId ? { ...t, volume: parseFloat(vol) } : t) }))
+  }
+
   const toggleInstrument = (n) => { const a=!instruments[n].active; setInstruments(p=>({...p,[n]:{...p[n],active:a}})); }
   const handleVolume     = (n, v) => { const vol=parseFloat(v); setInstruments(p=>({...p,[n]:{...p[n],volume:vol}})); }
   const handlePattern    = (n, t) => {
@@ -573,271 +602,132 @@ export default function App() {
   )
 
   // ════════════════════════════════════════════════════════════════
-  //  EDITOR
+  //  EDITOR SINFONIA PRO
   // ════════════════════════════════════════════════════════════════
   return (
-    <div className="app-container editor-layout">
+    <div className="pro-layout" onClick={() => setFocusedZone('canvas')}>
+      {/* ── BARRA DE TRANSPORTE ── */}
+      <header className={`pro-transport focus-zone ${focusedZone === 'transport' ? 'is-focused' : ''}`} onClick={(e) => { e.stopPropagation(); setFocusedZone('transport') }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+          <button className="btn-ghost" onClick={() => setCurrentView('dashboard')}><ChevronLeft size={16}/> Proyectos</button>
+          <span style={{ fontFamily: 'var(--font-head)', fontWeight: 600 }}>{project?.name || 'SinfonIA Pro'}</span>
+        </div>
+        
+        <div className="lcd-display">
+          <div className="lcd-section">
+            <span className="lcd-label">POS</span>
+            <span className="lcd-value">001:01:01</span>
+          </div>
+          <div className="lcd-section">
+            <span className="lcd-label">TIME</span>
+            <span className="lcd-value">00:00.000</span>
+          </div>
+          <div className="lcd-section">
+            <span className="lcd-label">BPM</span>
+            <span className="lcd-value accent">{(project?.tempo_bpm || 120).toFixed(2)}</span>
+          </div>
+          <div className="lcd-section">
+            <span className="lcd-label">KEY</span>
+            <span className="lcd-value accent">{project?.key_signature || 'C'}</span>
+          </div>
+          <div className="lcd-section">
+            <span className="lcd-label">CPU LOAD</span>
+            <span className="lcd-value">{audioPerf.cpu}%</span>
+          </div>
+          <div className="lcd-section">
+            <span className="lcd-label">MEM</span>
+            <span className="lcd-value">{audioPerf.memory}MB</span>
+          </div>
+        </div>
 
-      {/* ── CHAT SIDEBAR ── */}
-      <aside className="chat-sidebar">
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <button className="btn-secondary" onClick={handlePlayToggle}>{isPlaying ? <Pause size={14}/> : <Play size={14}/>}</button>
+          <button className="btn-secondary" onClick={handleStop}><Square size={14}/></button>
+          <button className="btn-amber" onClick={handleRunAnalysis}><Sparkles size={14}/> Análisis</button>
+        </div>
+      </header>
+
+      {/* ── COLUMNA IZQUIERDA: CHAT IA ── */}
+      <aside className={`pro-column pro-column-chat focus-zone ${focusedZone === 'chat' ? 'is-focused' : ''}`} onClick={(e) => { e.stopPropagation(); setFocusedZone('chat') }}>
         <header className="chat-header">
-          <button className="btn-ghost" onClick={()=>setCurrentView('dashboard')} style={{fontSize:11}}>
-            <ChevronLeft size={12}/> Proyectos
-          </button>
           <div className="chat-producer-badge">
-            {isPlaying
-              ? <div className="playing-indicator"><span/><span/><span/><span/></div>
-              : <div className="chat-producer-dot"/>}
             <span className="chat-producer-label">Productor IA</span>
           </div>
         </header>
-
         <div className="chat-messages">
           {chatHistory.map(msg=>
             msg.sender==='system'
               ? <div key={msg.id} className="message-system-log">{msg.message}</div>
               : <div key={msg.id} className={`message-bubble ${msg.sender==='user'?'message-user':'message-assistant'}`}>{msg.message}</div>
           )}
-          {isLoadingAi&&<div className="message-bubble message-assistant" style={{opacity:.6,fontStyle:'italic'}}>Componiendo…</div>}
+          {isLoadingAi&&<div className="message-bubble message-assistant" style={{opacity:.6,fontStyle:'italic'}}>Analizando espectro…</div>}
           <div ref={chatEndRef}/>
         </div>
-
         <form onSubmit={handleSendChat} className="chat-input-area">
-          <input type="text" placeholder="Pídele cambios al productor…" value={chatInput} onChange={e=>setChatInput(e.target.value)} className="chat-input" disabled={isLoadingAi}/>
-          <button type="submit" className="btn-primary" disabled={isLoadingAi||!chatInput.trim()} style={{padding:'7px 10px'}}><Send size={13}/></button>
+          <input type="text" placeholder="Asistente listo..." value={chatInput} onChange={e=>setChatInput(e.target.value)} className="chat-input" disabled={isLoadingAi}/>
+          <button type="submit" className="btn-primary" disabled={isLoadingAi||!chatInput.trim()}><Send size={14}/></button>
         </form>
       </aside>
 
-      {/* ── STUDIO WORKSPACE ── */}
-      <main className="studio-workspace">
-
-        {/* Topbar */}
-        <header className="workspace-topbar">
-          <div style={{display:'flex',alignItems:'center',gap:10,minWidth:0}}>
-            <span className="project-name-label">{project.name}</span>
-          </div>
-
-          <div style={{display:'flex',alignItems:'center',gap:8}}>
-            {/* Analysis button */}
-            <button className="btn-amber" onClick={handleRunAnalysis} style={{fontSize:11.5,padding:'5px 10px'}}>
-              <Sparkles size={12}/> Análisis Pro
-            </button>
-
-            {/* Transport */}
-            <div className="transport">
-              <button onClick={handlePlayToggle} className={`btn-transport ${isPlaying?'play-active':''}`}>
-                {isPlaying?<Pause size={14}/>:<Play size={14}/>}
-              </button>
-              <button onClick={handleStop} className="btn-transport"><Square size={13}/></button>
-              <div className="transport-divider"/>
-              <div className="transport-meta">
-                <span style={{color:'var(--c-text-3)',fontWeight:400}}>BPM</span>
-                <span>
-                  <input type="number" value={project.tempo_bpm} onChange={e=>updateBpm(e.target.value)} style={{width:34}}/>
-                </span>
-              </div>
-              <div className="transport-divider"/>
-              <div className="transport-meta">
-                <span style={{color:'var(--c-text-3)',fontWeight:400}}>Key</span>
-                <select value={project.key_signature} onChange={e=>updateKey(e.target.value)}>
-                  {['C','G','D','A','E','B','F#','F','Bb','Eb','Ab','Db','Am','Em','Bm','F#m','C#m','G#m','Dm','Gm','Cm','Fm'].map(k=><option key={k} value={k} style={{background:'#181b22'}}>{k}</option>)}
-                </select>
-              </div>
-              <div className="transport-divider"/>
-              <div className="transport-meta">
-                <span style={{color:'var(--c-text-3)',fontWeight:400}}>Capo</span>
-                <span>
-                  <input type="number" min="0" max="12" value={project.capo_position} onChange={e=>updateCapo(e.target.value)} style={{width:22}}/>
-                </span>
-              </div>
-            </div>
-          </div>
-        </header>
-
-        {/* Section strip */}
-        <div className="section-strip">
-          <span className="section-strip-label">Secciones</span>
-          {sections.map(sec=>(
-            <button key={sec.id} className={`sec-tab ${activeSectionId===sec.id?'active':''}`} onClick={()=>{setActiveSectionId(sec.id);handleStop()}}>
-              {sec.name}
-              {sections.length>1&&<span className="sec-tab-del" onClick={e=>deleteSection(sec.id,e)}>×</span>}
-            </button>
-          ))}
-          <button className="btn-ghost" onClick={addSection} style={{fontSize:11,flexShrink:0}}>+ Sección</button>
-        </div>
-
-        {/* ── DAW TIMELINE ── */}
-        {activeSection && (
-          <div className="daw-timeline">
-            {/* Ruler */}
-            <div className="daw-ruler">
-              <div className="daw-track-head">Acordes</div>
-              <div className="daw-beats-scroll">
-                {Array.from({length:totalBeats}).map((_,bi)=>{
-                  const chord=getChordAt(bi)
-                  const active=isPlaying&&currentBeat===bi
-                  const start=isChordStart(bi)
-                  return (
-                    <div key={bi} className={`daw-beat ${active?'beat-active':''} ${start?'chord-start':''} ${bi%4===0?'bar-start':''}`}>
-                      {start&&<span className="daw-beat-chord">{chord}</span>}
-                      <span className="daw-beat-num">{bi+1}</span>
-                    </div>
-                  )
-                })}
-              </div>
-            </div>
-
-            {/* Tracks */}
-            {[
-              {key:'guitar',label:'Guitarra',cls:'trk-guitar',color:'var(--trk-guitar)',note:bi=>instruments.guitar.active},
-              {key:'piano', label:'Piano',   cls:'trk-piano', color:'var(--trk-piano)', note:()=>instruments.piano.active},
-              {key:'bass',  label:'Bajo',    cls:'trk-bass',  color:'var(--trk-bass)',  note:bi=>instruments.bass.active},
-              {key:'drums', label:'Batería', cls:'trk-drums', color:'var(--trk-drums)', note:()=>instruments.drums.active},
-              {key:'strings', label:'Cuerdas', cls:'trk-strings', color:'var(--trk-strings)', note:()=>instruments.strings.active},
-              {key:'violin', label:'Violín', cls:'trk-violin', color:'var(--trk-violin)', note:()=>instruments.violin.active},
-              {key:'vibraphone', label:'Vibráfono', cls:'trk-vibraphone', color:'var(--trk-vibraphone)', note:()=>instruments.vibraphone.active},
-            ].map(({key,label,cls,color,note})=>(
-              <div key={key} className={`daw-track ${cls}`}>
-                <div className="daw-track-label" onClick={() => setCollapsedTimelineTracks(p => ({...p, [key]: !p[key]}))} style={{ cursor: 'pointer', display: 'flex', justifyContent: 'space-between' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <div className="track-color-dot" style={{background:color}}/>
-                    {label}
-                  </div>
-                  <span style={{ fontSize: 10, opacity: 0.5, paddingRight: 4 }}>{collapsedTimelineTracks[key] ? '+' : '−'}</span>
-                </div>
-                {!collapsedTimelineTracks[key] && (
-                  <div className="daw-track-cells">
-                    {Array.from({length:totalBeats}).map((_,bi)=>(
-                      <div key={bi} className={`daw-cell ${note(bi)?'has-block':''} ${isPlaying&&currentBeat===bi?'beat-active':''}`}/>
-                    ))}
-                  </div>
-                )}
-              </div>
-            ))}
-
-            {/* Progress */}
-            <div className="daw-progress-track">
-              <div className="daw-progress-fill" style={{width:`${progress}%`}}/>
-            </div>
-          </div>
-        )}
-
-        {/* ── Chord Palette ── */}
-        {activeSection && (
-          <div className="chord-palette">
-            <div className="active-chord-box">
-              <div className="active-chord-name">{isPlaying?(currentChord||'—'):(activeSection?.chords[0]?.chord||'—')}</div>
-              <div className="active-chord-label">Activo</div>
-            </div>
-            <div className="chord-palette-divider"/>
-            <div className="chord-seq">
-              {activeSection.chords.map((c,i)=>(
-                <div key={i} className={`chord-block ${isPlaying&&currentChordIdx===i?'chord-playing':''}`}>
-                  {c.chord}<sup style={{fontSize:8,opacity:.5,marginLeft:1}}>{c.beats}</sup>
-                </div>
-              ))}
-            </div>
-            <div className="chord-palette-divider"/>
-            <span className="chord-add-label">Añadir:</span>
-            {['C','G','D','A','E','F','Am','Em','Dm','Bm','Cmaj7','Am7','G7','D7'].map(ch=>(
-              <button key={ch} className="chord-badge" onClick={()=>addChord(ch)}>{ch}</button>
-            ))}
-            <button className="btn-ghost" onClick={removeLastChord} style={{marginLeft:'auto',flexShrink:0,fontSize:11}}>− Último</button>
-          </div>
-        )}
-
-        {/* ── Bottom Panel (Fretboard / Piano Roll) ── */}
-        <div style={{ display: 'flex', gap: '8px', padding: '0 24px', marginTop: '16px' }}>
-          <button className={`sec-tab ${activeBottomTab==='fretboard'?'active':''}`} onClick={() => setActiveBottomTab('fretboard')}>Guitarra / Diapasón</button>
-          <button className={`sec-tab ${activeBottomTab==='pianoroll'?'active':''}`} onClick={() => setActiveBottomTab('pianoroll')}>Piano Roll (Melodías)</button>
-        </div>
-
-        <div className="fretboard-wrapper" style={{ marginTop: '0', borderTopLeftRadius: '0' }}>
-          {activeBottomTab === 'fretboard' ? (
+      {/* ── COLUMNA CENTRAL: CANVAS & DOCK ── */}
+      <main className={`pro-column pro-column-center focus-zone ${focusedZone === 'canvas' ? 'is-focused' : ''}`} onClick={(e) => { e.stopPropagation(); setFocusedZone('canvas') }}>
+        <div className="canvas-area">
+          <div className="glass-panel">
             <Fretboard
-              keySignature={project.key_signature}
+              keySignature={project?.key_signature}
               activeChord={isPlaying?currentChord:(activeSection?.chords[0]?.chord||'')}
-              capoPosition={project.capo_position}
+              capoPosition={project?.capo_position}
               onPlayNote={playFretNote}
               currentBeat={currentBeat}
               isPlaying={isPlaying}
             />
-          ) : (
-            <div style={{ padding: '16px' }}>
-              <PianoRoll
-                totalBeats={totalBeats}
-                melody={activeSection?.melody || []}
-                currentBeat={currentBeat}
-                isPlaying={isPlaying}
-                onPlayNote={(note) => {
-                  playNote(note, "8n");
-                }}
-                onMelodyChange={(newMelody) => {
-                  const upd = sections.map(s => s.id === activeSectionId ? { ...s, melody: newMelody } : s)
-                  setSections(upd)
-                  saveState(project, upd)
-                }}
-              />
-            </div>
+          </div>
+        </div>
+
+        {/* Dock Inferior */}
+        <div className={`pro-dock focus-zone ${activeMidiTrack ? 'is-open' : ''} ${focusedZone === 'dock' ? 'is-focused' : ''}`} onClick={(e) => { e.stopPropagation(); setFocusedZone('dock') }}>
+          <div className="dock-header">
+            <span>Editor MIDI: {activeMidiTrack || 'Ninguno'}</span>
+            <button className="btn-ghost" onClick={() => setActiveMidiTrack(null)}>Cerrar ×</button>
+          </div>
+          {activeMidiTrack && (
+             <div style={{ flex: 1, padding: 16 }}>
+               <PianoRoll
+                  totalBeats={totalBeats}
+                  melody={activeSection?.melody || []}
+                  currentBeat={currentBeat}
+                  isPlaying={isPlaying}
+                  onPlayNote={(note) => { playNote(note, "8n"); }}
+                  onMelodyChange={(newMelody) => {
+                    const upd = sections.map(s => s.id === activeSectionId ? { ...s, melody: newMelody } : s)
+                    setSections(upd)
+                    saveState(project, upd)
+                  }}
+                />
+             </div>
           )}
         </div>
       </main>
 
-      {/* ── MIXER SIDEBAR ── */}
-      <aside className="right-sidebar">
-        <div className="sidebar-section-title" style={{marginBottom:4}}>Mezcla</div>
-
-        {[
-          {key:'guitar',label:'Guitarra',cls:'mixer-ch-guitar',color:'var(--trk-guitar)',patterns:[['strum','Strum'],['arpeggio','Arpegio'],['fingerpicking','Finger']]},
-          {key:'piano', label:'Piano',   cls:'mixer-ch-piano', color:'var(--trk-piano)', patterns:[['arpeggio','Arpegio'],['chord','Bloque'],['boogie','Boogie']]},
-          {key:'bass',  label:'Bajo',    cls:'mixer-ch-bass',  color:'var(--trk-bass)',  patterns:[['roots','Tónicas'],['walking','Walking'],['funk slap','Slap']]},
-          {key:'drums', label:'Batería', cls:'mixer-ch-drums', color:'var(--trk-drums)', patterns:[['basic','Base'],['shuffle','Shuffle'],['metronome','Click']]},
-          {key:'strings', label:'Cuerdas', cls:'mixer-ch-strings', color:'var(--trk-strings)', patterns:[['pad','Pad']]},
-          {key:'violin', label:'Violín', cls:'mixer-ch-violin', color:'var(--trk-violin)', patterns:[['melody','Melodía']]},
-          {key:'vibraphone', label:'Vibráfono', cls:'mixer-ch-vibraphone', color:'var(--trk-vibraphone)', patterns:[['chords','Acordes']]},
-        ].map(({key,label,cls,color,patterns})=>(
-          <div key={key} className={`mixer-channel ${cls}`}>
-            <div className="mixer-channel-header" onClick={() => setCollapsedMixerChannels(p => ({...p, [key]: !p[key]}))} style={{ cursor: 'pointer' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <span className="mixer-channel-name" style={{color:instruments[key].active?color:'var(--c-text-3)'}}>
-                  {label}
-                </span>
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }} onClick={e => e.stopPropagation()}>
-                <label className="toggle-switch">
-                  <input type="checkbox" checked={instruments[key].active} onChange={()=>toggleInstrument(key)}/>
-                  <span className="slider-round"/>
-                </label>
-                <span style={{ fontSize: 10, opacity: 0.5, userSelect: 'none' }}>{collapsedMixerChannels[key] ? '+' : '−'}</span>
-              </div>
-            </div>
-            {!collapsedMixerChannels[key] && (
-              <>
-                <input type="range" min="-40" max="0" value={instruments[key].volume} onChange={e=>handleVolume(key,e.target.value)} className="custom-range" disabled={!instruments[key].active}/>
-                <div className="pattern-btns">
-                  {patterns.map(([pat,lbl])=>(
-                    <button key={pat} className={`pat-btn ${instruments[key].type===pat?'pat-active':''}`} onClick={()=>handlePattern(key,pat)} disabled={!instruments[key].active}>{lbl}</button>
-                  ))}
+      {/* ── COLUMNA DERECHA: RACK INSTRUMENTOS ── */}
+      <aside className={`pro-column pro-column-rack focus-zone ${focusedZone === 'rack' ? 'is-focused' : ''}`} onClick={(e) => { e.stopPropagation(); setFocusedZone('rack') }}>
+        <div className="rack-header">Rack de Instrumentos</div>
+        <div className="rack-content">
+          {masterJson.tracks && masterJson.tracks.map(track => (
+            <div key={track.id} className="rack-module">
+              <div className="rack-module-header">
+                <span className="rack-module-title">{track.id.toUpperCase()}</span>
+                <div className="rack-controls">
+                  <button className={`btn-mute-solo ${track.mute ? 'm-active' : ''}`} onClick={() => handleToggleMute(track.id)}>M</button>
+                  <button className={`btn-mute-solo ${track.solo ? 's-active' : ''}`} onClick={() => handleToggleSolo(track.id)}>S</button>
                 </div>
-              </>
-            )}
-          </div>
-        ))}
-
-        <div style={{flex:1}}/>
-
-        {/* Cover Art */}
-        <div>
-          <div className="sidebar-section-title" style={{marginBottom:6}}>Portada</div>
-          <div className="cover-art-section">
-            {project?.cover_art
-              ? <img src={project.cover_art} alt="Portada" className="cover-art-img"/>
-              : <div className="cover-art-placeholder"><ImageIcon size={20} style={{opacity:.2}}/><span>Sin portada</span></div>
-            }
-            <button onClick={handleGenerateCover} className="btn-secondary" disabled={isGeneratingArt} style={{justifyContent:'center',fontSize:11.5}}>
-              <Sparkles size={11}/>{isGeneratingArt?'Generando…':'Generar Portada'}
-            </button>
-          </div>
+              </div>
+              <input type="range" min="-40" max="10" defaultValue="0" onChange={(e) => handleTrackVolume(track.id, e.target.value)} className="pro-fader" />
+              <button className={`btn-secondary ${activeMidiTrack === track.id ? 'is-active' : ''}`} onClick={() => setActiveMidiTrack(activeMidiTrack === track.id ? null : track.id)}>
+                {activeMidiTrack === track.id ? 'Cerrar Editor' : 'Editar MIDI'}
+              </button>
+            </div>
+          ))}
         </div>
       </aside>
 
@@ -845,15 +735,12 @@ export default function App() {
       {isAnalysisOpen && (
         <div className="modal-overlay" onClick={()=>setIsAnalysisOpen(false)}>
           <div className="modal-content" onClick={e=>e.stopPropagation()}>
-            <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',paddingBottom:12,borderBottom:'1px solid var(--c-border)'}}>
-              <h2 style={{fontSize:15,fontWeight:800,color:'var(--c-warn)',display:'flex',alignItems:'center',gap:6}}><Sparkles size={14}/> Análisis de Producción</h2>
-              <button onClick={()=>setIsAnalysisOpen(false)} style={{background:'transparent',border:'none',color:'var(--c-text-2)',cursor:'pointer',fontSize:18,lineHeight:1}}>×</button>
+            <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',paddingBottom:16,borderBottom:'1px solid var(--c-border)'}}>
+              <h2 style={{fontSize:16,fontWeight:500,color:'var(--accent-cyan)',display:'flex',alignItems:'center',gap:8}}><Sparkles size={16}/> Análisis IA</h2>
+              <button onClick={()=>setIsAnalysisOpen(false)} className="btn-ghost">×</button>
             </div>
-            <div style={{fontSize:12.5,lineHeight:1.75,color:'var(--c-text-1)',whiteSpace:'pre-wrap',maxHeight:'60vh',overflowY:'auto'}}>
+            <div style={{fontSize:13,lineHeight:1.75,color:'var(--c-text-2)',whiteSpace:'pre-wrap',maxHeight:'60vh',overflowY:'auto', paddingTop:16}}>
               {analysisResult}
-            </div>
-            <div style={{display:'flex',justifyContent:'flex-end',paddingTop:12,borderTop:'1px solid var(--c-border)'}}>
-              <button onClick={()=>setIsAnalysisOpen(false)} className="btn-primary">Cerrar</button>
             </div>
           </div>
         </div>
@@ -861,3 +748,5 @@ export default function App() {
     </div>
   )
 }
+
+export default App
