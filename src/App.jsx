@@ -501,10 +501,10 @@ export default function App() {
       <main className="dashboard-content">
         {/* PROJECTS */}
         {activeTab==='projects' && <>
-          <div className="page-header">
+          <div style={{ maxWidth: '896px', margin: '32px auto 0', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', paddingBottom: '16px', borderBottom: '1px solid var(--c-border)' }}>
             <div>
-              <h1 className="page-title">Mis Proyectos</h1>
-              <p className="page-subtitle">Selecciona un proyecto para abrir el estudio</p>
+              <h1 style={{ fontFamily: 'var(--font-mono, monospace)', letterSpacing: '-0.025em', fontSize: '24px', fontWeight: 600, margin: 0, color: '#fff' }}>Mis Proyectos</h1>
+              <p style={{ margin: '8px 0 0', fontSize: '14px', color: 'var(--c-text-2)' }}>Selecciona un proyecto para abrir el estudio</p>
             </div>
             <button className="btn-primary" onClick={handleCreateProject}><Plus size={13}/> Nuevo</button>
           </div>
@@ -522,9 +522,15 @@ export default function App() {
               <button className="btn-primary" onClick={handleCreateProject} style={{margin:'0 auto'}}>Crear mi primer proyecto</button>
             </div>
           ) : (
-            <div className="p-8 max-w-4xl mx-auto mt-10">
+            <div style={{ padding: '32px 0', maxWidth: '896px', margin: '0 auto' }}>
               {projectsList.map(p=>(
-                <div key={p.id} className="bg-[#121214] border border-zinc-800 rounded-lg p-4 mb-3 flex items-center justify-between hover:border-zinc-600 transition-all cursor-pointer" onClick={()=>handleSelectProject(p)}>
+                <div 
+                  key={p.id} 
+                  style={{ backgroundColor: '#121214', border: '1px solid #27272a', borderRadius: '8px', padding: '16px', marginBottom: '12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer', transition: 'border-color 0.2s ease' }}
+                  onMouseEnter={e => e.currentTarget.style.borderColor = '#52525b'}
+                  onMouseLeave={e => e.currentTarget.style.borderColor = '#27272a'}
+                  onClick={()=>handleSelectProject(p)}
+                >
                   
                   {/* Izquierda: Información del Proyecto */}
                   <div style={{ position: 'relative', zIndex: 2 }}>
@@ -541,12 +547,19 @@ export default function App() {
 
                   {/* Derecha: Botones de Acción */}
                   <div style={{ display: 'flex', alignItems: 'center', gap: '16px', position: 'relative', zIndex: 2 }}>
-                    <button className="bg-zinc-200 text-black px-3 py-1.5 rounded-md text-xs font-semibold hover:bg-white transition-colors" onClick={(e) => { e.stopPropagation(); handleSelectProject(p); }}>
+                    <button 
+                      style={{ backgroundColor: '#e4e4e7', color: '#000', padding: '6px 12px', borderRadius: '6px', fontSize: '12px', fontWeight: 600, border: 'none', cursor: 'pointer', transition: 'background-color 0.2s ease' }}
+                      onMouseEnter={e => e.currentTarget.style.backgroundColor = '#ffffff'}
+                      onMouseLeave={e => e.currentTarget.style.backgroundColor = '#e4e4e7'}
+                      onClick={(e) => { e.stopPropagation(); handleSelectProject(p); }}
+                    >
                       Abrir Estudio
                     </button>
                     <Trash2 
                       size={18} 
-                      className="text-zinc-500 hover:text-rose-400 transition-colors cursor-pointer" 
+                      style={{ color: '#71717a', cursor: 'pointer', transition: 'color 0.2s ease' }} 
+                      onMouseEnter={e => e.currentTarget.style.color = '#fb7185'}
+                      onMouseLeave={e => e.currentTarget.style.color = '#71717a'}
                       onClick={(e) => handleDeleteProject(p.id, e)} 
                     />
                   </div>
