@@ -71,6 +71,15 @@ export default function App() {
   const [activeMidiTrack, setActiveMidiTrack] = useState(null)
   const [audioPerf, setAudioPerf] = useState({ cpu: 12.4, memory: 45 })
 
+  const [currentView,    setCurrentView]    = useState('dashboard')
+  const [activeTab,      setActiveTab]      = useState('projects')
+  const [projectsList,   setProjectsList]   = useState([])
+  const [project,        setProject]        = useState(null)
+  const [sections,       setSections]       = useState([])
+  const [activeSectionId,setActiveSectionId]= useState('')
+  const [isPlaying,      setIsPlaying]      = useState(false)
+
+  // Efecto simulador de carga de audio
   useEffect(() => {
     if (!isPlaying) {
       setAudioPerf({ cpu: 2.1, memory: 45 })
@@ -85,13 +94,6 @@ export default function App() {
     return () => clearInterval(interval)
   }, [isPlaying])
 
-  const [currentView,    setCurrentView]    = useState('dashboard')
-  const [activeTab,      setActiveTab]      = useState('projects')
-  const [projectsList,   setProjectsList]   = useState([])
-  const [project,        setProject]        = useState(null)
-  const [sections,       setSections]       = useState([])
-  const [activeSectionId,setActiveSectionId]= useState('')
-  const [isPlaying,      setIsPlaying]      = useState(false)
   const [currentBeat,    setCurrentBeat]    = useState(0)
   const [totalBeats,     setTotalBeats]     = useState(16)
   const [currentChordIdx,setCurrentChordIdx]= useState(0)
