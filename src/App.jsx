@@ -675,7 +675,7 @@ export default function App() {
           <div className="glass-panel">
             <Fretboard
               keySignature={project?.key_signature}
-              activeChord={isPlaying?currentChord:(activeSection?.chords[0]?.chord||'')}
+              activeChord={isPlaying?currentChord:(activeSection?.chords?.[0]?.chord||'')}
               capoPosition={project?.capo_position}
               onPlayNote={playFretNote}
               currentBeat={currentBeat}
