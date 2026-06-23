@@ -1,5 +1,5 @@
 import React from 'react'
-import { parseChordNotes } from '../utils/AudioEngine'
+import { parseChordNotes } from '../utils/musicTheory'
 import GuitarChordDiagram from './GuitarChordDiagram'
 
 const STANDARD_TUNING = [64, 59, 55, 50, 45, 40]

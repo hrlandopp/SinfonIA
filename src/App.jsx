@@ -13,7 +13,8 @@ import {
   isGeminiConfigured,
   saveGeminiKey
 } from './utils/geminiClient'
-import { audioEngine } from './utils/AudioEngine'
+import { useAudioEngine } from './hooks/useAudioEngine'
+import { parseChordNotes } from './utils/musicTheory'
 import Fretboard from './components/Fretboard'
 import PianoRoll from './components/PianoRoll'
 
@@ -28,6 +29,43 @@ const DEFAULT_SECTIONS = [
 ]
 
 export default function App() {
+  const [masterJson, setMasterJson] = useState({
+    project: {
+      id: "sinfonia_001",
+      name: "Mi Primera Composición",
+      bpm: 120,
+      timeSignature: [4, 4],
+      key: "C",
+      scale: "major"
+    },
+    tracks: [
+      {
+        id: "track_01",
+        name: "Piano Principal",
+        type: "sampler", 
+        instrument: "piano", 
+        volume: -6.0, 
+        pan: 0,
+        mute: false,
+        solo: false,
+        sequences: []
+      },
+      {
+        id: "track_02",
+        name: "Bajo Sintético",
+        type: "synth",
+        instrument: "FMSynth",
+        volume: -12.0,
+        pan: 0,
+        mute: false,
+        solo: false,
+        sequences: []
+      }
+    ]
+  })
+
+  const { play, stop, playNote, playChord } = useAudioEngine(masterJson)
+
   const [currentView,    setCurrentView]    = useState('dashboard')
   const [activeTab,      setActiveTab]      = useState('projects')
   const [projectsList,   setProjectsList]   = useState([])
@@ -68,6 +106,81 @@ export default function App() {
 
   const isCloudActive = isSupabaseConfigured() && !useLocalMode
 
+  // ── Sincronizador de UI -> JSON Maestro ──
+  useEffect(() => {
+    const sec = sections.find(s => s.id === activeSectionId)
+    if (!sec) return
+
+    setMasterJson(prev => {
+      // Clonar el estado actual del JSON para no mutarlo directamente
+      const nextJson = { ...prev };
+      
+      const pianoNotes = [];
+      const bassNotes = [];
+
+      let cumulativeBeat = 0;
+
+      // 1. Mapear Acordes Visuales a Notas Físicas
+      sec.chords.forEach(c => {
+        const chordName = c.chord;
+        const durationBeats = c.beats || 4;
+        
+        const pianoChordNotes = parseChordNotes(chordName, 3); // Octava 3
+        const bassChordNotes = parseChordNotes(chordName, 2);  // Octava 2
+        
+        if (pianoChordNotes.length > 0) {
+          // El piano toca el acorde en bloque (una vez por acorde)
+          pianoNotes.push({
+            pitch: pianoChordNotes,
+            time: `${cumulativeBeat} * 4n`, // Tiempo exacto usando notación musical de Tone
+            duration: `${durationBeats} * 4n`,
+            velocity: 0.7
+          });
+        }
+
+        if (bassChordNotes.length > 0) {
+          // El bajo toca la tónica repetidamente (cada negra)
+          const rootNote = bassChordNotes[0];
+          for (let b = 0; b < durationBeats; b++) {
+            bassNotes.push({
+              pitch: rootNote,
+              time: `${cumulativeBeat + b} * 4n`,
+              duration: "8n", 
+              velocity: 0.9
+            });
+          }
+        }
+
+        cumulativeBeat += durationBeats;
+      });
+
+      // 2. Mapear Melodía Visual (Piano Roll) a Notas
+      if (sec.melody && sec.melody.length > 0) {
+        sec.melody.forEach(m => {
+          pianoNotes.push({
+            pitch: m.note,
+            time: `${m.beat} * 4n`,
+            duration: m.duration || "8n",
+            velocity: 0.8
+          });
+        });
+      }
+
+      // 3. Inyectar en los Tracks
+      nextJson.tracks = nextJson.tracks.map(track => {
+        if (track.id === 'track_01') {
+          return { ...track, sequences: [{ id: `seq_piano_${sec.id}`, startTime: "0:0:0", notes: pianoNotes }] };
+        }
+        if (track.id === 'track_02') {
+          return { ...track, sequences: [{ id: `seq_bass_${sec.id}`, startTime: "0:0:0", notes: bassNotes }] };
+        }
+        return track;
+      });
+
+      return nextJson;
+    });
+  }, [sections, activeSectionId]);
+
   // ── Effects ─────────────────────────────────────────────────────
   useEffect(() => {
     if (isCloudActive) { setDbStatus('Conectado a Supabase ⚡'); loadFromSupabase() }
@@ -86,19 +199,14 @@ export default function App() {
   useEffect(() => {
     const sec = sections.find(s => s.id === activeSectionId)
     if (!sec) return
-    audioEngine.setChords(sec.chords || [])
-    audioEngine.setMelody(sec.melody || [])
     setTotalBeats(sec.chords.reduce((a, c) => a + (c.beats || 4), 0))
     if (sec.accompaniment) Object.keys(sec.accompaniment).forEach(k => {
-      audioEngine.setPatternType(k, sec.accompaniment[k])
       setInstruments(p => ({...p, [k]: {...p[k], type: sec.accompaniment[k]}}))
     })
   }, [sections, activeSectionId])
 
   useEffect(() => {
-    audioEngine.onBeatCallback = (beat, chordIdx, chordName, beats) => {
-      setCurrentBeat(beat); setCurrentChordIdx(chordIdx); setCurrentChord(chordName || ''); setTotalBeats(beats || 16)
-    }
+    // TODO: Implementar sincronización de UI (onBeatCallback) con el nuevo motor reactivo
   }, [])
 
   // ── Storage ──────────────────────────────────────────────────────
@@ -143,7 +251,7 @@ export default function App() {
 
   // ── Select project ───────────────────────────────────────────────
   const handleSelectProject = async (sel) => {
-    setProject(sel); audioEngine.setBpm(sel.tempo_bpm); handleStop()
+    setProject(sel); handleStop()
     const fallbackSecs = () => DEFAULT_SECTIONS.map(s => ({ ...s, id: `${s.id}-${Date.now()}` }))
     const fallbackChat = (name) => [{ id: 'welcome', sender: 'assistant', message: `¡Bienvenido a "${name}"! ¿Qué quieres componer hoy?` }]
 
@@ -199,32 +307,31 @@ export default function App() {
   }
 
   // ── Transport ────────────────────────────────────────────────────
-  const handleStop = () => { audioEngine.stop(); setIsPlaying(false); setCurrentBeat(0); setCurrentChordIdx(0); setCurrentChord('') }
+  const handleStop = () => { stop(); setIsPlaying(false); setCurrentBeat(0); setCurrentChordIdx(0); setCurrentChord('') }
   const handlePlayToggle = async () => {
-    if (isPlaying) { audioEngine.stop(); setIsPlaying(false) }
-    else { try { await audioEngine.startContext(); audioEngine.play(); setIsPlaying(true) } catch (e) { alert('Haz clic en la página primero para activar el audio.') } }
+    if (isPlaying) { stop(); setIsPlaying(false) }
+    else { try { await play(); setIsPlaying(true) } catch (e) { alert('Haz clic en la página primero para activar el audio.') } }
   }
-  const playFretNote = async (note) => { 
+  const playFretNote = async (noteName, midiVal) => { 
     try { 
-      await audioEngine.startContext()
-      // Si hay un acorde activo, toca el acorde completo; si no, toca solo la nota
       if (currentChord) {
-        audioEngine.playChord(currentChord, 0.6)
+        const chordNotes = parseChordNotes(currentChord, 3);
+        if (chordNotes.length) await playChord(chordNotes, "4n");
       } else {
-        audioEngine.playNote(note, 0.5)
+        await playNote(midiVal || noteName, "4n");
       }
     } catch (e) { console.error(e) } 
   }
 
-  const updateBpm = (v) => { const val = Math.min(240, Math.max(40, parseInt(v)||120)); const u={...project, tempo_bpm: val}; setProject(u); audioEngine.setBpm(val); saveState(u, sections) }
+  const updateBpm = (v) => { const val = Math.min(240, Math.max(40, parseInt(v)||120)); const u={...project, tempo_bpm: val}; setProject(u); saveState(u, sections) }
   const updateKey = (k) => { const u={...project, key_signature: k}; setProject(u); saveState(u, sections) }
   const updateCapo = (v) => { const val=Math.min(12,Math.max(0,parseInt(v)||0)); const u={...project, capo_position: val}; setProject(u); saveState(u, sections) }
 
   // ── Mixer ────────────────────────────────────────────────────────
-  const toggleInstrument = (n) => { const a=!instruments[n].active; setInstruments(p=>({...p,[n]:{...p[n],active:a}})); audioEngine.setInstrumentActive(n, a) }
-  const handleVolume     = (n, v) => { const vol=parseFloat(v); setInstruments(p=>({...p,[n]:{...p[n],volume:vol}})); audioEngine.setVolume(n, vol) }
+  const toggleInstrument = (n) => { const a=!instruments[n].active; setInstruments(p=>({...p,[n]:{...p[n],active:a}})); }
+  const handleVolume     = (n, v) => { const vol=parseFloat(v); setInstruments(p=>({...p,[n]:{...p[n],volume:vol}})); }
   const handlePattern    = (n, t) => {
-    setInstruments(p=>({...p,[n]:{...p[n],type:t}})); audioEngine.setPatternType(n, t)
+    setInstruments(p=>({...p,[n]:{...p[n],type:t}}));
     const upd=sections.map(s=>s.id===activeSectionId?{...s,accompaniment:{...s.accompaniment,[n]:t}}:s); setSections(upd); saveState(project,upd)
   }
 
@@ -254,7 +361,7 @@ export default function App() {
       const aMsg={id:`a-${Date.now()}`,sender:'assistant',message:ai.message||'Sin respuesta.'}
       let uProj={...project},uSecs=[...sections]; const ch=ai.changes
       if(ch&&Object.keys(ch).length>0){
-        if(ch.tempo_bpm){uProj={...uProj,tempo_bpm:ch.tempo_bpm};audioEngine.setBpm(ch.tempo_bpm)}
+        if(ch.tempo_bpm){uProj={...uProj,tempo_bpm:ch.tempo_bpm};}
         if(ch.key_signature)uProj={...uProj,key_signature:ch.key_signature}
         if(typeof ch.capo_position==='number')uProj={...uProj,capo_position:ch.capo_position}
         if(ch.mood)uProj={...uProj,mood:ch.mood}
@@ -262,8 +369,6 @@ export default function App() {
           Object.keys(ch.instruments).forEach(k => {
             if(instruments[k]){
               setInstruments(p=>({...p,[k]:{...p[k],...ch.instruments[k]}}))
-              if(ch.instruments[k].active !== undefined) audioEngine.setInstrumentActive(k, ch.instruments[k].active)
-              if(ch.instruments[k].type) audioEngine.setPatternType(k, ch.instruments[k].type)
             }
           })
         }
@@ -665,8 +770,7 @@ export default function App() {
                 currentBeat={currentBeat}
                 isPlaying={isPlaying}
                 onPlayNote={(note) => {
-                  audioEngine.startContext()
-                  audioEngine.playNote(note, 0.5)
+                  playNote(note, "8n");
                 }}
                 onMelodyChange={(newMelody) => {
                   const upd = sections.map(s => s.id === activeSectionId ? { ...s, melody: newMelody } : s)
