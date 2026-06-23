@@ -522,23 +522,35 @@ export default function App() {
               <button className="btn-primary" onClick={handleCreateProject} style={{margin:'0 auto'}}>Crear mi primer proyecto</button>
             </div>
           ) : (
-            <div className="projects-grid" style={{ paddingLeft: '24px' }}>
+            <div className="p-8 max-w-4xl mx-auto mt-10">
               {projectsList.map(p=>(
-                <div key={p.id} className="project-card" onClick={()=>handleSelectProject(p)}>
-                  {p.cover_art&&<div style={{position:'absolute',inset:0,backgroundImage:`url(${p.cover_art})`,backgroundSize:'cover',backgroundPosition:'center',opacity:.08,borderRadius:'var(--r-md)'}}/>}
-                  <div className="project-card-header" style={{position:'relative',zIndex:2}}>
-                    <div>
-                      <div className="project-card-title">{p.name}</div>
-                      <div className="project-card-meta"><span>{p.tempo_bpm} BPM</span><span>·</span><span>{p.key_signature}</span>{p.mood&&<><span>·</span><span>{p.mood}</span></>}</div>
+                <div key={p.id} className="bg-[#121214] border border-zinc-800 rounded-lg p-4 mb-3 flex items-center justify-between hover:border-zinc-600 transition-all cursor-pointer" onClick={()=>handleSelectProject(p)}>
+                  
+                  {/* Izquierda: Información del Proyecto */}
+                  <div style={{ position: 'relative', zIndex: 2 }}>
+                    <div style={{ fontSize: '15px', fontWeight: 600, color: '#fff', marginBottom: '4px' }}>{p.name}</div>
+                    <div style={{ fontSize: '12px', color: 'var(--c-text-3)', display: 'flex', gap: '8px', alignItems: 'center' }}>
+                      <span>{p.tempo_bpm} BPM</span>
+                      <span>·</span>
+                      <span>{p.key_signature}</span>
+                      {p.mood && <><span>·</span><span>{p.mood}</span></>}
+                      <span>·</span>
+                      <span>{new Date(p.updated_at).toLocaleDateString()}</span>
                     </div>
                   </div>
-                  <div className="project-card-footer" style={{position:'relative',zIndex:2}}>
-                    <span style={{fontSize:10,color:'var(--c-text-3)'}}>{new Date(p.updated_at).toLocaleDateString()}</span>
-                    <div style={{display:'flex',alignItems:'center',gap:8}}>
-                      <span className="btn-ghost" style={{fontSize:11, padding:'4px 8px', borderRadius:'4px'}}>Abrir →</span>
-                      <button onClick={e=>handleDeleteProject(p.id,e)} className="btn-ghost" style={{padding:'4px'}}><Trash2 size={14}/></button>
-                    </div>
+
+                  {/* Derecha: Botones de Acción */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '16px', position: 'relative', zIndex: 2 }}>
+                    <button className="bg-zinc-200 text-black px-3 py-1.5 rounded-md text-xs font-semibold hover:bg-white transition-colors" onClick={(e) => { e.stopPropagation(); handleSelectProject(p); }}>
+                      Abrir Estudio
+                    </button>
+                    <Trash2 
+                      size={18} 
+                      className="text-zinc-500 hover:text-rose-400 transition-colors cursor-pointer" 
+                      onClick={(e) => handleDeleteProject(p.id, e)} 
+                    />
                   </div>
+
                 </div>
               ))}
             </div>
