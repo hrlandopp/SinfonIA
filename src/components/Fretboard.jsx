@@ -1,6 +1,5 @@
 import React from 'react'
 import { parseChordNotes } from '../utils/musicTheory'
-import GuitarChordDiagram from './GuitarChordDiagram'
 
 const STANDARD_TUNING = [64, 59, 55, 50, 45, 40]
 const STRING_NAMES = ['E', 'B', 'G', 'D', 'A', 'E']
@@ -123,14 +122,8 @@ export default function Fretboard({
         </div>
       </div>
 
-      {activeChord && (
-        <div style={{ padding: '0 16px 16px', display: 'flex', justifyContent: 'flex-start' }}>
-          <GuitarChordDiagram chordName={activeChord} />
-        </div>
-      )}
-
-      <div className="fretboard-scroll-container">
-        <div className="fretboard-neck">
+      <div className="fretboard-scroll-container" style={{ overflowX: 'auto', paddingBottom: '16px', width: '100%' }}>
+        <div className="fretboard-neck" style={{ position: 'relative', display: 'flex', flexDirection: 'column', background: '#1a1a1a', padding: '12px 0', borderRadius: '8px', boxShadow: 'inset 0 0 20px rgba(0,0,0,0.8)', minWidth: '800px' }}>
           
           {/* Indicador visual de progreso (solo si está reproduciendo) */}
           {isPlaying && (
@@ -163,6 +156,7 @@ export default function Fretboard({
             <div 
               key={stringIdx} 
               className={`fretboard-string string-${stringIdx}`}
+              style={{ display: 'flex', alignItems: 'center', position: 'relative', height: '36px', borderBottom: '1px solid rgba(255,255,255,0.05)' }}
             >
               <div 
                 style={{ 
@@ -187,6 +181,7 @@ export default function Fretboard({
                   <div 
                     key={fretIdx} 
                     className={`fretboard-fret fret-${fretIdx} ${isMarker ? 'fret-marker' : ''} ${isDoubleMarker ? 'fret-marker-double' : ''}`}
+                    style={{ flex: 1, minWidth: '45px', height: '100%', borderRight: '1px solid rgba(255,255,255,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' }}
                     onClick={() => noteInfo.isPlayable && onPlayNote && onPlayNote(noteInfo.noteName, noteInfo.midiVal)}
                   >
                     {noteInfo.isPlayable && (noteInfo.isScaleNote || noteInfo.isChordNote) && (
@@ -196,6 +191,7 @@ export default function Fretboard({
                           noteInfo.isChordNote ? 'fret-note-chord' : 
                           'fret-note-scale'
                         }`}
+                        style={{ width:'22px', height:'22px', borderRadius:'50%', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'10px', zIndex:10, cursor:'pointer', border:'none', fontWeight:'bold', color: '#fff', background: noteInfo.isRoot ? 'var(--accent-rose)' : noteInfo.isChordNote ? 'var(--accent-cyan)' : 'rgba(255,255,255,0.15)' }}
                         title={`${noteInfo.noteName} (Traste ${fretIdx})`}
                       >
                         {noteInfo.noteName}

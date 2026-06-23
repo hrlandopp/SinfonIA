@@ -17,6 +17,7 @@ import { useAudioEngine } from './hooks/useAudioEngine'
 import { parseChordNotes } from './utils/musicTheory'
 import Fretboard from './components/Fretboard'
 import PianoRoll from './components/PianoRoll'
+import GuitarChordDiagram from './components/GuitarChordDiagram'
 
 const INITIAL_PROJECTS = [
   { id: 'local-proj-1', name: 'Balada de Otoño',    tempo_bpm: 85,  key_signature: 'Em', capo_position: 2, mood: 'Melancólico', cover_art: '', updated_at: new Date().toISOString() },
@@ -521,7 +522,7 @@ export default function App() {
               <button className="btn-primary" onClick={handleCreateProject} style={{margin:'0 auto'}}>Crear mi primer proyecto</button>
             </div>
           ) : (
-            <div className="projects-grid">
+            <div className="projects-grid" style={{ paddingLeft: '24px' }}>
               {projectsList.map(p=>(
                 <div key={p.id} className="project-card" onClick={()=>handleSelectProject(p)}>
                   {p.cover_art&&<div style={{position:'absolute',inset:0,backgroundImage:`url(${p.cover_art})`,backgroundSize:'cover',backgroundPosition:'center',opacity:.08,borderRadius:'var(--r-md)'}}/>}
@@ -534,8 +535,8 @@ export default function App() {
                   <div className="project-card-footer" style={{position:'relative',zIndex:2}}>
                     <span style={{fontSize:10,color:'var(--c-text-3)'}}>{new Date(p.updated_at).toLocaleDateString()}</span>
                     <div style={{display:'flex',alignItems:'center',gap:8}}>
-                      <span style={{fontSize:11,color:'var(--teal)',fontWeight:700}}>Abrir →</span>
-                      <button onClick={e=>handleDeleteProject(p.id,e)} style={{background:'transparent',border:'none',color:'var(--c-text-3)',cursor:'pointer',padding:2,display:'flex'}}><Trash2 size={12}/></button>
+                      <span className="btn-ghost" style={{fontSize:11, padding:'4px 8px', borderRadius:'4px'}}>Abrir →</span>
+                      <button onClick={e=>handleDeleteProject(p.id,e)} className="btn-ghost" style={{padding:'4px'}}><Trash2 size={14}/></button>
                     </div>
                   </div>
                 </div>
@@ -684,6 +685,13 @@ export default function App() {
               isPlaying={isPlaying}
             />
           </div>
+          
+          {/* Cuadro de Acorde Activo Limpio */}
+          { (isPlaying ? currentChord : (activeSection?.chords?.[0]?.chord)) && (
+            <div style={{ marginTop: '16px', display: 'flex', justifyContent: 'center', background: 'rgba(0,0,0,0.3)', padding: '12px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.05)' }}>
+              <GuitarChordDiagram chordName={isPlaying ? currentChord : (activeSection?.chords?.[0]?.chord)} />
+            </div>
+          )}
         </div>
 
         {/* Dock Inferior */}
