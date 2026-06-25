@@ -444,7 +444,7 @@ export default function App() {
   }
 
   // ── Transport ────────────────────────────────────────────────────
-  const handleStop = () => { stop(); setIsPlaying(false); setCurrentBeat(0); setCurrentChordIdx(0); setCurrentChord('') }
+  const handleStop = () => { stop(); setIsPlaying(false); setCurrentChordIdx(0); setCurrentChord('') }
   const handlePlayToggle = async () => {
     if (isPlaying) { stop(); setIsPlaying(false) }
     else { try { await play(); setIsPlaying(true) } catch (e) { alert('Haz clic en la página primero para activar el audio.') } }
@@ -515,7 +515,7 @@ export default function App() {
     try {
       const context = {
         masterJson,
-        uiFocus: { ...uiFocusContext, currentBeat: Math.floor(Tone.Transport.seconds * 2) },
+        uiFocus: { ...uiFocusContext },
         opposingHistory: agentType === 'producer' ? mascotHistory.slice(-5) : producerHistory.slice(-5)
       };
 
@@ -616,7 +616,7 @@ export default function App() {
   const activeSection = sections.find(s => s.id === activeSectionId)
   const getChordAt = (bi) => { if(!activeSection)return''; let sum=0; for(const c of activeSection.chords){if(bi>=sum&&bi<sum+c.beats)return c.chordLabel||c.chord||'';sum+=c.beats}; return'' }
   const isChordStart = (bi) => { if(!activeSection)return false; let sum=0; for(const c of activeSection.chords){if(bi===sum)return true;sum+=c.beats}; return false }
-  const progress = totalBeats > 0 ? (currentBeat / totalBeats) * 100 : 0
+
 
   // ════════════════════════════════════════════════════════════════
   //  LAYOUT SINFONIA PRO (V7)
