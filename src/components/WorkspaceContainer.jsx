@@ -1,6 +1,8 @@
 import React from 'react';
+import TracksPanel from './TracksPanel';
+import VisualEditors from './VisualEditors';
 
-const WorkspaceContainer = ({ activeTab }) => {
+const WorkspaceContainer = ({ activeTab, masterJson, uiFocus, updateUIFocus, playFretNote }) => {
   const getDisplayText = () => {
     switch (activeTab) {
       case 'editor':
@@ -19,18 +21,39 @@ const WorkspaceContainer = ({ activeTab }) => {
       flex: 1,
       backgroundColor: 'var(--c-bg)',
       display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
+      flexDirection: 'column',
       overflow: 'hidden'
     }}>
-      <div style={{
-        fontFamily: 'var(--font-mono)',
-        fontSize: '14px',
-        color: 'var(--c-text-3)',
-        letterSpacing: '0.1em'
-      }}>
-        [{getDisplayText()}]
-      </div>
+      {activeTab === 'editor' ? (
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+          <div style={{ flex: '0 0 50%', display: 'flex', flexDirection: 'column', borderBottom: '1px solid #2a2a30' }}>
+            <TracksPanel 
+              masterJson={masterJson} 
+              uiFocus={uiFocus} 
+              updateUIFocus={updateUIFocus} 
+            />
+          </div>
+          <div style={{ flex: '0 0 50%', display: 'flex', flexDirection: 'column' }}>
+            <VisualEditors 
+              uiFocus={uiFocus} 
+              playFretNote={playFretNote} 
+            />
+          </div>
+        </div>
+      ) : (
+        <div style={{
+          flex: 1,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          fontFamily: 'var(--font-mono)',
+          fontSize: '14px',
+          color: 'var(--c-text-3)',
+          letterSpacing: '0.1em'
+        }}>
+          [{getDisplayText()}]
+        </div>
+      )}
     </main>
   );
 };

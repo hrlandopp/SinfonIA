@@ -24,6 +24,7 @@ import GuitarChordDiagram from './components/GuitarChordDiagram'
 import ControlBar from './components/ControlBar'
 import AIManagerPanel from './components/AIManagerPanel'
 import WorkspaceContainer from './components/WorkspaceContainer'
+import ProjectLauncher from './components/ProjectLauncher'
 
 const INITIAL_PROJECTS = [
   { id: 'local-proj-1', name: 'Balada de Otoño',    tempo_bpm: 85,  key_signature: 'Em', capo_position: 2, mood: 'Melancólico', cover_art: '', updated_at: new Date().toISOString() },
@@ -77,6 +78,7 @@ export default function App() {
   const [activeMidiTrack, setActiveMidiTrack] = useState(null)
   const [audioPerf, setAudioPerf] = useState({ cpu: 12.4, memory: 45 })
 
+  const [currentLayout,  setCurrentLayout]  = useState('launcher')
   const [currentView,    setCurrentView]    = useState('dashboard')
   const [activeTab,      setActiveTab]      = useState('projects')
   const [projectsList,   setProjectsList]   = useState([])
@@ -421,7 +423,7 @@ export default function App() {
       setProducerHistory(finalChat)
       if (!chat) localStorage.setItem(`local_chat_${sel.id}`, JSON.stringify(finalChat))
     }
-    setCurrentView('editor')
+    setCurrentLayout('studio')
   }
 
   // ── Create / Delete ──────────────────────────────────────────────
@@ -499,17 +501,19 @@ export default function App() {
   const removeLastChord = () => { const upd=sections.map(s=>{if(s.id!==activeSectionId||s.chords.length<=1)return s;const c=[...s.chords];c.pop();return{...s,chords:c}}); setSections(upd); saveState(project,upd) }
 
   // ── AI ───────────────────────────────────────────────────────────
-  const handleAgentInteraction = async (agentType, e) => {
-    e.preventDefault(); if(!chatInput.trim()||isLoadingAi) return
+  const handleAgentInteraction = async (agentType, e, promptOverride = null) => {
+    if (e) e.preventDefault(); 
+    const txt = promptOverride || chatInput.trim();
+    if(!txt||isLoadingAi) return
     if(agentType === 'producer' && producerProvider === 'gemini' && !isGeminiConfigured()){alert('Configura tu Gemini API Key en Ajustes primero.');return}
     
-    const userMsg={id:`u-${Date.now()}`,sender:'user',message:chatInput.trim()}
+    const userMsg={id:`u-${Date.now()}`,sender:'user',message:txt}
     
     const currentHistory = agentType === 'producer' ? producerHistory : mascotHistory;
     const setHistory = agentType === 'producer' ? setProducerHistory : setMascotHistory;
     const hist=[...currentHistory,userMsg]; 
     setHistory(hist); 
-    setChatInput(''); 
+    if (!promptOverride) setChatInput(''); 
     setIsLoadingAi(true);
 
     try {
@@ -569,6 +573,12 @@ export default function App() {
     finally{setIsLoadingAi(false)}
   }
 
+  const requestMascotHelp = () => {
+    if (!mascotAlert) return;
+    const payload = `Resolver anomalía armónica: ${mascotAlert.message}. Delta: ${JSON.stringify(mascotAlert.delta)}`;
+    handleAgentInteraction('mascot', null, payload);
+  };
+
   const handleRunAnalysis = async () => {
     if(!isGeminiConfigured()){alert('Configura tu Gemini API Key primero.');return}
     setAnalysisResult('Analizando tu composición…'); setIsAnalysisOpen(true)
@@ -621,6 +631,16 @@ export default function App() {
   // ════════════════════════════════════════════════════════════════
   //  LAYOUT SINFONIA PRO (V7)
   // ════════════════════════════════════════════════════════════════
+  if (currentLayout === 'launcher') {
+    return (
+      <ProjectLauncher 
+        projectsList={projectsList}
+        onInitializeProject={handleCreateProject}
+        onOpenWorkspace={(p) => handleSelectProject(p)}
+      />
+    );
+  }
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', width: '100vw', overflow: 'hidden', backgroundColor: 'var(--c-bg)' }}>
       <ControlBar 
@@ -632,8 +652,17 @@ export default function App() {
         onTabChange={(tab) => updateUIFocus({ activeTab: tab })} 
       />
       <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
-        <AIManagerPanel uiFocusContext={uiFocusContext} mascotAlert={mascotAlert} />
-        <WorkspaceContainer activeTab={uiFocusContext.activeTab} />
+        <AIManagerPanel 
+          uiFocusContext={uiFocusContext} 
+          mascotAlert={mascotAlert} 
+          producerHistory={producerHistory}
+          mascotHistory={mascotHistory}
+          chatInput={chatInput}
+          setChatInput={setChatInput}
+          handleAgentInteraction={handleAgentInteraction}
+          requestMascotHelp={requestMascotHelp}
+        />
+        <WorkspaceContainer activeTab={uiFocusContext.activeTab} masterJson={masterJson} uiFocus={uiFocusContext} updateUIFocus={updateUIFocus} playFretNote={playFretNote} />
       </div>
     </div>
   );

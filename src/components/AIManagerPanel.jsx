@@ -1,6 +1,26 @@
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 
-const AIManagerPanel = React.memo(({ uiFocusContext, mascotAlert }) => {
+const AIManagerPanel = React.memo(({ 
+  uiFocusContext, 
+  mascotAlert, 
+  producerHistory, 
+  mascotHistory, 
+  chatInput, 
+  setChatInput, 
+  handleAgentInteraction, 
+  requestMascotHelp 
+}) => {
+  const producerEndRef = useRef(null);
+  const mascotEndRef = useRef(null);
+
+  useEffect(() => {
+    producerEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [producerHistory]);
+
+  useEffect(() => {
+    mascotEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [mascotHistory]);
+
   return (
     <aside style={{
       width: '280px',
@@ -8,67 +28,155 @@ const AIManagerPanel = React.memo(({ uiFocusContext, mascotAlert }) => {
       borderRight: '1px solid var(--c-border)',
       display: 'flex',
       flexDirection: 'column',
-      padding: '16px',
-      gap: '16px',
-      overflowY: 'auto'
+      overflow: 'hidden'
     }}>
       <div style={{
+        padding: '16px',
         fontSize: '11px',
         fontWeight: '600',
         color: 'var(--c-text-2)',
         textTransform: 'uppercase',
         letterSpacing: '0.05em',
-        borderBottom: '1px solid var(--c-border)',
-        paddingBottom: '8px'
+        borderBottom: '1px solid var(--c-border)'
       }}>
-        AI Management Console
+        AI_MANAGEMENT_CONSOLE
       </div>
 
-      <div style={{
-        backgroundColor: 'var(--c-surface)',
-        border: '1px solid var(--c-border)',
-        padding: '12px',
-        display: 'flex',
-        flexDirection: 'column',
-        gap: '8px'
-      }}>
-        <div style={{ fontSize: '10px', color: 'var(--c-text-3)', textTransform: 'uppercase' }}>Focus Properties</div>
-        <div style={{ fontSize: '12px', fontFamily: 'var(--font-mono)' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-            <span>Instrument:</span> <span style={{ color: 'var(--c-text-1)' }}>{uiFocusContext?.selectedInstrument || 'NONE'}</span>
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', padding: '16px', gap: '16px', overflowY: 'hidden' }}>
+        
+        {/* MACRO PRODUCER */}
+        <div style={{
+          flex: 1,
+          backgroundColor: 'var(--c-surface)',
+          border: '1px solid var(--c-border)',
+          display: 'flex',
+          flexDirection: 'column',
+          overflow: 'hidden'
+        }}>
+          <div style={{ padding: '8px', fontSize: '10px', color: 'var(--c-text-3)', fontFamily: 'var(--font-mono)', borderBottom: '1px solid var(--c-border)' }}>
+            [MACRO_PRODUCER_INTERFACE]
           </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '4px' }}>
-            <span>Section ID:</span> <span style={{ color: 'var(--c-text-1)' }}>{uiFocusContext?.selectedSectionId || 'NONE'}</span>
+          <div style={{ flex: 1, overflowY: 'auto', padding: '8px', display: 'flex', flexDirection: 'column', gap: '8px', backgroundColor: '#121214' }}>
+            {producerHistory && producerHistory.length > 0 ? producerHistory.map((msg, i) => (
+              <div key={i} style={{ 
+                backgroundColor: '#222226', 
+                padding: '8px', 
+                fontFamily: 'var(--font-mono)', 
+                fontSize: '10px', 
+                color: msg.sender === 'user' ? 'var(--c-text-1)' : 'var(--c-text-2)' 
+              }}>
+                <span style={{ color: 'var(--c-text-3)' }}>[{msg.sender.toUpperCase()}]: </span>
+                {msg.message}
+              </div>
+            )) : (
+              <div style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', color: 'var(--c-text-3)' }}>// NO_HISTORY</div>
+            )}
+            <div ref={producerEndRef} />
           </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '4px' }}>
-            <span>Beat:</span> <span style={{ color: 'var(--c-text-1)' }}>{uiFocusContext?.currentBeat || 0}</span>
+          <div style={{ padding: '8px', borderTop: '1px solid var(--c-border)', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            <input 
+              type="text" 
+              value={chatInput}
+              onChange={(e) => setChatInput(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleAgentInteraction('producer', e)}
+              placeholder="ENTER_COMMAND..."
+              style={{
+                width: '100%',
+                backgroundColor: '#121214',
+                border: '1px solid var(--c-border)',
+                color: 'var(--c-text-1)',
+                padding: '6px 8px',
+                fontFamily: 'var(--font-mono)',
+                fontSize: '10px',
+                outline: 'none'
+              }}
+            />
+            <button 
+              onClick={(e) => handleAgentInteraction('producer', e)}
+              style={{
+                width: '100%',
+                padding: '6px',
+                backgroundColor: 'var(--c-elevated)',
+                border: '1px solid var(--c-border)',
+                color: 'var(--c-text-1)',
+                fontFamily: 'var(--font-mono)',
+                fontSize: '10px',
+                cursor: 'pointer'
+              }}
+              onMouseEnter={e => e.currentTarget.style.backgroundColor = 'var(--c-surface)'}
+              onMouseLeave={e => e.currentTarget.style.backgroundColor = 'var(--c-elevated)'}
+            >
+              SEND_COMMAND
+            </button>
           </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '4px' }}>
-            <span>Last Action:</span> <span style={{ color: 'var(--c-text-1)' }}>{uiFocusContext?.lastUserAction || 'NONE'}</span>
+        </div>
+
+        {/* MICRO MASCOT */}
+        <div style={{
+          flex: 1,
+          backgroundColor: 'var(--c-surface)',
+          border: '1px solid var(--c-border)',
+          display: 'flex',
+          flexDirection: 'column',
+          overflow: 'hidden'
+        }}>
+          <div style={{ padding: '8px', fontSize: '10px', color: 'var(--c-text-3)', fontFamily: 'var(--font-mono)', borderBottom: '1px solid var(--c-border)' }}>
+            [CONTEXTUAL_HARMONIC_ANALYZER]
+          </div>
+          <div style={{ padding: '8px', borderBottom: '1px solid var(--c-border)', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            {mascotAlert ? (
+              <>
+                <div style={{ fontSize: '10px', color: '#ef4444', fontFamily: 'var(--font-mono)' }}>
+                  SYSTEM_STATUS: CRITICAL_ANOMALY_DETECTED
+                </div>
+                <div style={{ fontSize: '10px', color: 'var(--c-text-2)', fontFamily: 'var(--font-mono)' }}>
+                  {mascotAlert.message}
+                </div>
+                <div style={{ fontSize: '9px', color: 'var(--c-text-3)', fontFamily: 'var(--font-mono)' }}>
+                  [DELTA]: {JSON.stringify(mascotAlert.delta)}
+                </div>
+                <button 
+                  onClick={requestMascotHelp}
+                  style={{
+                    marginTop: '8px',
+                    width: '100%',
+                    padding: '8px',
+                    backgroundColor: '#3b82f6',
+                    border: 'none',
+                    color: '#fff',
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: '10px',
+                    cursor: 'pointer'
+                  }}
+                >
+                  INVOKE_AI_RESOLVER
+                </button>
+              </>
+            ) : (
+              <div style={{ fontSize: '10px', color: '#10b981', fontFamily: 'var(--font-mono)' }}>
+                SYSTEM_STATUS: NOMINAL // NO_ANOMALIES_DETECTED
+              </div>
+            )}
+          </div>
+          <div style={{ flex: 1, overflowY: 'auto', padding: '8px', display: 'flex', flexDirection: 'column', gap: '8px', backgroundColor: '#121214' }}>
+             {mascotHistory && mascotHistory.length > 0 ? mascotHistory.map((msg, i) => (
+              <div key={i} style={{ 
+                backgroundColor: '#222226', 
+                padding: '8px', 
+                fontFamily: 'var(--font-mono)', 
+                fontSize: '10px', 
+                color: msg.sender === 'user' ? 'var(--c-text-1)' : 'var(--c-text-2)' 
+              }}>
+                <span style={{ color: 'var(--c-text-3)' }}>[{msg.sender.toUpperCase()}]: </span>
+                {msg.message}
+              </div>
+            )) : (
+              <div style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', color: 'var(--c-text-3)' }}>// MICRO_AGENT_STANDBY</div>
+            )}
+            <div ref={mascotEndRef} />
           </div>
         </div>
       </div>
-
-      <div style={{
-        backgroundColor: 'var(--c-surface)',
-        border: '1px solid var(--c-border)',
-        padding: '12px',
-        display: 'flex',
-        flexDirection: 'column',
-        gap: '8px'
-      }}>
-        <div style={{ fontSize: '10px', color: 'var(--c-text-3)', textTransform: 'uppercase' }}>Contextual Harmonic Analyzer</div>
-        {mascotAlert ? (
-          <div style={{ fontSize: '12px', color: 'var(--c-warn)', lineHeight: '1.4' }}>
-            [WARNING] {mascotAlert.message}
-          </div>
-        ) : (
-          <div style={{ fontSize: '12px', color: 'var(--c-ok)', fontFamily: 'var(--font-mono)' }}>
-            [STATUS] HARMONIC SYNC OK
-          </div>
-        )}
-      </div>
-
     </aside>
   );
 });
