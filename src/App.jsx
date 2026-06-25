@@ -1,23 +1,29 @@
-import React, { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect, useRef, useCallback } from 'react'
 import {
   Play, Pause, Square, Send, Settings, Plus, Trash2,
   Music, Sparkles, ChevronLeft,
   FolderOpen, BookOpen, HardDrive, Image as ImageIcon
 } from 'lucide-react'
 
+import debounce from 'lodash.debounce'
 import { supabase, isSupabaseConfigured, saveSupabaseCredentials } from './utils/supabaseClient'
 import {
-  sendMessageToProducerAI,
   runDeepCompositionAnalysis,
   generateSongArt,
   isGeminiConfigured,
   saveGeminiKey
 } from './utils/geminiClient'
+import { sendMessageToAI } from './utils/aiClient'
 import { useAudioEngine } from './hooks/useAudioEngine'
 import { parseChordNotes } from './utils/musicTheory'
+import { evaluateHarmonicClash } from './utils/musicLogic'
+import { usePlaybackControls } from './context/PlaybackContext.jsx'
 import Fretboard from './components/Fretboard'
 import PianoRoll from './components/PianoRoll'
 import GuitarChordDiagram from './components/GuitarChordDiagram'
+import ControlBar from './components/ControlBar'
+import AIManagerPanel from './components/AIManagerPanel'
+import WorkspaceContainer from './components/WorkspaceContainer'
 
 const INITIAL_PROJECTS = [
   { id: 'local-proj-1', name: 'Balada de Otoño',    tempo_bpm: 85,  key_signature: 'Em', capo_position: 2, mood: 'Melancólico', cover_art: '', updated_at: new Date().toISOString() },
@@ -25,8 +31,8 @@ const INITIAL_PROJECTS = [
 ]
 
 const DEFAULT_SECTIONS = [
-  { id: 'sec-intro', name: 'Intro', order_index: 0, chords: [{ chord: 'Am', beats: 4 }, { chord: 'F', beats: 4 }, { chord: 'C', beats: 4 }, { chord: 'G', beats: 4 }], accompaniment: { guitar: 'strum', piano: 'arpeggio', bass: 'roots', drums: 'basic', strings: 'pad', violin: 'melody', vibraphone: 'chords' } },
-  { id: 'sec-verso', name: 'Verso', order_index: 1, chords: [{ chord: 'Am', beats: 4 }, { chord: 'Dm', beats: 4 }, { chord: 'G',  beats: 4 }, { chord: 'C', beats: 4 }], accompaniment: { guitar: 'strum', piano: 'arpeggio', bass: 'roots', drums: 'basic', strings: 'pad', violin: 'melody', vibraphone: 'chords' } },
+  { id: 'sec-intro', name: 'Intro', order_index: 0, chords: [{ chordLabel: 'Am', beats: 4, events: null }, { chordLabel: 'F', beats: 4, events: null }, { chordLabel: 'C', beats: 4, events: null }, { chordLabel: 'G', beats: 4, events: null }], accompaniment: { guitar: 'strum', piano: 'arpeggio', bass: 'roots', drums: 'basic', strings: 'pad', violin: 'melody', vibraphone: 'chords' } },
+  { id: 'sec-verso', name: 'Verso', order_index: 1, chords: [{ chordLabel: 'Am', beats: 4, events: null }, { chordLabel: 'Dm', beats: 4, events: null }, { chordLabel: 'G',  beats: 4, events: null }, { chordLabel: 'C', beats: 4, events: null }], accompaniment: { guitar: 'strum', piano: 'arpeggio', bass: 'roots', drums: 'basic', strings: 'pad', violin: 'melody', vibraphone: 'chords' } },
 ]
 
 export default function App() {
@@ -41,7 +47,7 @@ export default function App() {
     },
     tracks: [
       {
-        id: "track_01",
+        id: "piano",
         name: "Piano Principal",
         type: "sampler", 
         instrument: "piano", 
@@ -52,10 +58,10 @@ export default function App() {
         sequences: []
       },
       {
-        id: "track_02",
-        name: "Bajo Sintético",
-        type: "synth",
-        instrument: "FMSynth",
+        id: "bass",
+        name: "Bajo Eléctrico",
+        type: "sampler",
+        instrument: "bass",
         volume: -12.0,
         pan: 0,
         mute: false,
@@ -65,7 +71,6 @@ export default function App() {
     ]
   })
 
-  const { play, stop, playNote, playChord } = useAudioEngine(masterJson)
 
   // ── SINFONIA PRO: Nuevos Estados ──
   const [focusedZone, setFocusedZone] = useState('canvas')
@@ -78,7 +83,7 @@ export default function App() {
   const [project,        setProject]        = useState(null)
   const [sections,       setSections]       = useState([])
   const [activeSectionId,setActiveSectionId]= useState('')
-  const [isPlaying,      setIsPlaying]      = useState(false)
+  const { isPlaying, setIsPlaying } = usePlaybackControls()
 
   // Efecto simulador de carga de audio
   useEffect(() => {
@@ -95,11 +100,14 @@ export default function App() {
     return () => clearInterval(interval)
   }, [isPlaying])
 
-  const [currentBeat,    setCurrentBeat]    = useState(0)
+  // currentBeat y metrónomo alta velocidad fueron movidos a PlaybackContext
   const [totalBeats,     setTotalBeats]     = useState(16)
   const [currentChordIdx,setCurrentChordIdx]= useState(0)
   const [currentChord,   setCurrentChord]   = useState('')
-  const [chatHistory,    setChatHistory]    = useState([])
+  const [producerHistory, setProducerHistory] = useState([])
+  const [mascotHistory,   setMascotHistory]   = useState([])
+  const [producerProvider, setProducerProvider] = useState('gemini')
+  const [mascotProvider,   setMascotProvider]   = useState('openai')
   const [chatInput,      setChatInput]      = useState('')
   const [isLoadingAi,    setIsLoadingAi]    = useState(false)
   const [analysisResult, setAnalysisResult] = useState('')
@@ -126,78 +134,153 @@ export default function App() {
   const [collapsedMixerChannels, setCollapsedMixerChannels] = useState({})
   const chatEndRef = useRef(null)
 
+  const [uiFocusContext, setUiFocusContext] = useState({
+    activeTab: 'editor',
+    selectedInstrument: 'guitar',
+    selectedSectionId: null,
+    currentBeat: 0,
+    lastUserAction: 'initialize'
+  })
+
+  const updateUIFocus = useCallback((updates) => {
+    setUiFocusContext(prev => ({ ...prev, ...updates }));
+  }, [])
+
+  const [mascotAlert, setMascotAlert] = useState(null)
+  const [activeNoteEdit, setActiveNoteEdit] = useState(null)
+
+  useEffect(() => {
+    if (!activeNoteEdit) return;
+    if (currentChord) {
+      const currentChordNotes = parseChordNotes(currentChord, 3);
+      const { hasClash, suggestedNote } = evaluateHarmonicClash(currentChordNotes, activeNoteEdit.pitch);
+      if (hasClash) {
+        setMascotAlert({
+          hasLocalError: true,
+          message: `¡Ojo! La nota ${activeNoteEdit.pitch} choca armónicamente con el acorde actual (${currentChord}). Te sugiero usar ${suggestedNote} en su lugar.`,
+          delta: { chord: currentChord, badNote: activeNoteEdit.pitch, suggestedNote }
+        });
+      } else {
+        setMascotAlert(null);
+      }
+    }
+  }, [activeNoteEdit, currentChord]);
+
   const isCloudActive = isSupabaseConfigured() && !useLocalMode
 
   // ── Sincronizador de UI -> JSON Maestro ──
+  // Absorbe orquestaciones nativas de Gemini si existen, o genera fallback inteligente
   useEffect(() => {
     const sec = sections.find(s => s.id === activeSectionId)
     if (!sec) return
 
     setMasterJson(prev => {
-      // Clonar el estado actual del JSON para no mutarlo directamente
       const nextJson = { ...prev };
-      
-      const pianoNotes = [];
-      const bassNotes = [];
 
-      let cumulativeBeat = 0;
+      // ═══ PROCESAMIENTO DE TODAS LAS SECCIONES ═══
+      nextJson.sectionsData = [...sections].sort((a,b) => a.order_index - b.order_index).map(sec => {
+        let generatedTracks = [];
 
-      // 1. Mapear Acordes Visuales a Notas Físicas
-      sec.chords.forEach(c => {
-        const chordName = c.chord;
-        const durationBeats = c.beats || 4;
-        
-        const pianoChordNotes = parseChordNotes(chordName, 3); // Octava 3
-        const bassChordNotes = parseChordNotes(chordName, 2);  // Octava 2
-        
-        if (pianoChordNotes.length > 0) {
-          // El piano toca el acorde en bloque (una vez por acorde)
-          pianoNotes.push({
-            pitch: pianoChordNotes,
-            time: `${cumulativeBeat} * 4n`, // Tiempo exacto usando notación musical de Tone
-            duration: `${durationBeats} * 4n`,
-            velocity: 0.7
+        if (sec.tracks && sec.tracks.length > 0) {
+          const existingMixMap = {};
+          (prev.tracks || []).forEach(t => { existingMixMap[t.id] = { volume: t.volume, pan: t.pan, mute: t.mute, solo: t.solo }; });
+
+          generatedTracks = sec.tracks.map(aiTrack => ({
+            id: aiTrack.id,
+            name: aiTrack.name || aiTrack.id,
+            type: 'sampler',
+            instrument: aiTrack.id,
+            volume: existingMixMap[aiTrack.id]?.volume ?? -6.0,
+            pan: existingMixMap[aiTrack.id]?.pan ?? 0,
+            mute: existingMixMap[aiTrack.id]?.mute ?? false,
+            solo: existingMixMap[aiTrack.id]?.solo ?? false,
+            sequences: aiTrack.sequences || []
+          }));
+
+          if (sec.melody && sec.melody.length > 0) {
+            const pianoTrack = generatedTracks.find(t => t.id === 'piano');
+            if (pianoTrack) {
+              const melodyNotes = sec.melody.map(m => ({ pitch: m.note, time: `${m.beat} * 4n`, duration: m.duration || "8n", velocity: 0.8 }));
+              if (pianoTrack.sequences.length > 0) {
+                pianoTrack.sequences[0].notes = [...pianoTrack.sequences[0].notes, ...melodyNotes];
+              } else {
+                pianoTrack.sequences.push({ id: `seq_melody_${sec.id}`, startTime: "0:0:0", notes: melodyNotes });
+              }
+            }
+          }
+        } else {
+          const trackNotes = { piano: [], bass: [], guitar: [] };
+          let cumulativeBeat = 0;
+
+          sec.chords.forEach(c => {
+            const chordName = c.chordLabel || c.chord;
+            const durationBeats = c.beats || 4;
+
+            if (c.events && Object.keys(c.events).length > 0) {
+              Object.keys(c.events).forEach(instrKey => {
+                if (!trackNotes[instrKey]) trackNotes[instrKey] = [];
+                c.events[instrKey].forEach(ev => {
+                  trackNotes[instrKey].push({
+                    pitch: ev.pitch,
+                    time: ev.timeOffset !== undefined ? `${cumulativeBeat + ev.timeOffset} * 4n` : `${cumulativeBeat} * 4n`,
+                    duration: ev.duration || "4n",
+                    velocity: ev.velocity !== undefined ? ev.velocity : 0.7,
+                    timeOffset: ev.timeOffset || 0,
+                    articulation: ev.articulation || undefined
+                  });
+                });
+              });
+            } else {
+              const pianoChordNotes = parseChordNotes(chordName, 3);
+              const bassChordNotes = parseChordNotes(chordName, 2);
+
+              if (pianoChordNotes.length > 0) {
+                trackNotes.piano.push({ pitch: pianoChordNotes, time: `${cumulativeBeat} * 4n`, duration: `${durationBeats} * 4n`, velocity: 0.7 });
+              }
+              if (bassChordNotes.length > 0) {
+                const rootNote = bassChordNotes[0];
+                for (let b = 0; b < durationBeats; b++) {
+                  trackNotes.bass.push({ pitch: rootNote, time: `${cumulativeBeat + b} * 4n`, duration: "8n", velocity: 0.9 });
+                }
+              }
+            }
+            cumulativeBeat += durationBeats;
           });
-        }
 
-        if (bassChordNotes.length > 0) {
-          // El bajo toca la tónica repetidamente (cada negra)
-          const rootNote = bassChordNotes[0];
-          for (let b = 0; b < durationBeats; b++) {
-            bassNotes.push({
-              pitch: rootNote,
-              time: `${cumulativeBeat + b} * 4n`,
-              duration: "8n", 
-              velocity: 0.9
+          if (sec.melody && sec.melody.length > 0) {
+            sec.melody.forEach(m => {
+              if(!trackNotes.piano) trackNotes.piano = [];
+              trackNotes.piano.push({ pitch: m.note, time: `${m.beat} * 4n`, duration: m.duration || "8n", velocity: 0.8 });
             });
           }
+
+          generatedTracks = Object.keys(trackNotes)
+            .filter(instrId => trackNotes[instrId].length > 0)
+            .map(instrId => {
+              const existingTrack = (prev.tracks || []).find(t => t.id === instrId);
+              return {
+                id: instrId,
+                name: existingTrack?.name || instrId,
+                type: 'sampler',
+                instrument: instrId,
+                volume: existingTrack?.volume ?? -6.0,
+                pan: existingTrack?.pan ?? 0,
+                mute: existingTrack?.mute ?? false,
+                solo: existingTrack?.solo ?? false,
+                sequences: [{ id: `seq_${instrId}_${sec.id}`, startTime: "0:0:0", notes: trackNotes[instrId] }]
+              };
+            });
         }
 
-        cumulativeBeat += durationBeats;
+        return { ...sec, processedTracks: generatedTracks };
       });
 
-      // 2. Mapear Melodía Visual (Piano Roll) a Notas
-      if (sec.melody && sec.melody.length > 0) {
-        sec.melody.forEach(m => {
-          pianoNotes.push({
-            pitch: m.note,
-            time: `${m.beat} * 4n`,
-            duration: m.duration || "8n",
-            velocity: 0.8
-          });
-        });
+      // Mantenemos masterJson.tracks referenciando sólo a la activa para compatibilidad del mixer
+      nextJson.activeSectionId = activeSectionId;
+      const activeSecData = nextJson.sectionsData.find(s => s.id === activeSectionId);
+      if (activeSecData) {
+        nextJson.tracks = activeSecData.processedTracks;
       }
-
-      // 3. Inyectar en los Tracks
-      nextJson.tracks = nextJson.tracks.map(track => {
-        if (track.id === 'track_01') {
-          return { ...track, sequences: [{ id: `seq_piano_${sec.id}`, startTime: "0:0:0", notes: pianoNotes }] };
-        }
-        if (track.id === 'track_02') {
-          return { ...track, sequences: [{ id: `seq_bass_${sec.id}`, startTime: "0:0:0", notes: bassNotes }] };
-        }
-        return track;
-      });
 
       return nextJson;
     });
@@ -216,7 +299,7 @@ export default function App() {
 
   const reset = () => { setProjectsList(INITIAL_PROJECTS); localStorage.setItem('local_projects_list', JSON.stringify(INITIAL_PROJECTS)) }
 
-  useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [chatHistory])
+  useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [producerHistory, mascotHistory])
 
   useEffect(() => {
     const sec = sections.find(s => s.id === activeSectionId)
@@ -227,16 +310,42 @@ export default function App() {
     })
   }, [sections, activeSectionId])
 
-  useEffect(() => {
-    // TODO: Implementar sincronización de UI (onBeatCallback) con el nuevo motor reactivo
-  }, [])
+  // ── Sincronización Lenta de Acordes (El transporte real vive en PlaybackContext) ──
+  const handleBeatTick = useCallback((beat) => {
+    const sec = sections.find(s => s.id === activeSectionId);
+    if (sec && sec.chords) {
+      let sum = 0;
+      for (let i = 0; i < sec.chords.length; i++) {
+        const c = sec.chords[i];
+        const chordBeats = c.beats || 4;
+        if (beat >= sum && beat < sum + chordBeats) {
+          setCurrentChordIdx(prev => prev !== i ? i : prev);
+          const newChord = c.chordLabel || c.chord || '';
+          setCurrentChord(prev => prev !== newChord ? newChord : prev);
+          break;
+        }
+        sum += chordBeats;
+      }
+    }
+  }, [sections, activeSectionId]);
+
+  const { play, stop, playNote, playChord } = useAudioEngine(masterJson, handleBeatTick);
 
   // ── Storage ──────────────────────────────────────────────────────
   const saveLocal = (list) => { setProjectsList(list); localStorage.setItem('local_projects_list', JSON.stringify(list)) }
 
+  const debouncedSaveToSupabase = useCallback(
+    debounce((proj, secs, chat) => {
+      saveToSupabase(proj, secs, chat);
+    }, 1500),
+    []
+  );
+
   const saveState = (proj, secs, chat) => {
-    const chatToSave = chat || chatHistory
-    if (isCloudActive && proj.id !== 'local-project') { saveToSupabase(proj, secs, chatToSave) }
+    const chatToSave = chat || producerHistory
+    if (isCloudActive && proj.id !== 'local-project') { 
+      debouncedSaveToSupabase(proj, secs, chatToSave) 
+    }
     else {
       saveLocal(projectsList.map(p => p.id === proj.id ? { ...proj, updated_at: new Date().toISOString() } : p))
       localStorage.setItem(`local_secs_${proj.id}`, JSON.stringify(secs))
@@ -257,7 +366,13 @@ export default function App() {
       
       await supabase.from('sections').delete().eq('project_id', proj.id)
       const secInserts = secs.map(s => ({
-        project_id: proj.id, name: s.name, order_index: s.order_index, chords: s.chords, accompaniment: s.accompaniment, melody: s.melody || []
+        project_id: proj.id, 
+        name: s.name, 
+        order_index: s.order_index, 
+        chords: JSON.parse(JSON.stringify(s.chords)), // Clonación profunda
+        accompaniment: JSON.parse(JSON.stringify(s.accompaniment)), // Clonación profunda
+        melody: s.melody ? JSON.parse(JSON.stringify(s.melody)) : [],
+        tracks: s.tracks ? JSON.parse(JSON.stringify(s.tracks)) : null // Inmunidad a pérdida de tracks JSONB
       }))
       await supabase.from('sections').insert(secInserts)
 
@@ -287,13 +402,13 @@ export default function App() {
         }
         setSections(finalSecs); setActiveSectionId(finalSecs[0]?.id || '')
         const { data: chat } = await supabase.from('chat_history').select('*').eq('project_id', sel.id).order('created_at', { ascending: true })
-        setChatHistory(chat?.length ? chat : fallbackChat(sel.name))
+        setProducerHistory(chat?.length ? chat : fallbackChat(sel.name))
       } catch (e) {
         console.error(e)
         const ls = localStorage.getItem(`local_secs_${sel.id}`); const lc = localStorage.getItem(`local_chat_${sel.id}`)
         const secs = ls ? (()=>{try{return JSON.parse(ls)}catch{return fallbackSecs()}})() : fallbackSecs()
         setSections(secs); setActiveSectionId(secs[0]?.id || '')
-        setChatHistory(lc ? (()=>{try{return JSON.parse(lc)}catch{return fallbackChat(sel.name)}})() : fallbackChat(sel.name))
+        setProducerHistory(lc ? (()=>{try{return JSON.parse(lc)}catch{return fallbackChat(sel.name)}})() : fallbackChat(sel.name))
       }
     } else {
       const ls = localStorage.getItem(`local_secs_${sel.id}`); const lc = localStorage.getItem(`local_chat_${sel.id}`)
@@ -303,7 +418,7 @@ export default function App() {
       if (!secs) localStorage.setItem(`local_secs_${sel.id}`, JSON.stringify(finalSecs))
       const chat = lc ? (()=>{try{return JSON.parse(lc)}catch{return null}})() : null
       const finalChat = chat || fallbackChat(sel.name)
-      setChatHistory(finalChat)
+      setProducerHistory(finalChat)
       if (!chat) localStorage.setItem(`local_chat_${sel.id}`, JSON.stringify(finalChat))
     }
     setCurrentView('editor')
@@ -335,6 +450,8 @@ export default function App() {
     else { try { await play(); setIsPlaying(true) } catch (e) { alert('Haz clic en la página primero para activar el audio.') } }
   }
   const playFretNote = async (noteName, midiVal) => { 
+    setActiveNoteEdit({ pitch: noteName, time: Math.floor(Tone.Transport.seconds * 2) });
+    updateUIFocus({ lastUserAction: 'played_note' }); 
     try { 
       if (currentChord) {
         const chordNotes = parseChordNotes(currentChord, 3);
@@ -370,7 +487,7 @@ export default function App() {
   // ── Sections ─────────────────────────────────────────────────────
   const addSection = () => {
     const NAMES=['Verso','Coro','Puente','Outro']; const idx=sections.length
-    const sec={id:`sec-${Date.now()}`,name:`${NAMES[idx%4]||'Sección'} ${Math.floor(idx/4)+1}`,order_index:idx,chords:[{chord:'C',beats:4},{chord:'G',beats:4},{chord:'Am',beats:4},{chord:'F',beats:4}],accompaniment:{piano:'arpeggio',bass:'roots',drums:'basic'}}
+    const sec={id:`sec-${Date.now()}`,name:`${NAMES[idx%4]||'Sección'} ${Math.floor(idx/4)+1}`,order_index:idx,chords:[{chordLabel:'C',beats:4},{chordLabel:'G',beats:4},{chordLabel:'Am',beats:4},{chordLabel:'F',beats:4}],accompaniment:{piano:'arpeggio',bass:'roots',drums:'basic'}}
     const upd=[...sections,sec]; setSections(upd); saveState(project,upd)
   }
   const deleteSection = (id, e) => {
@@ -378,18 +495,37 @@ export default function App() {
     const upd=sections.filter(s=>s.id!==id).map((s,i)=>({...s,order_index:i})); setSections(upd)
     if(activeSectionId===id) setActiveSectionId(upd[0].id); saveState(project,upd)
   }
-  const addChord = (ch) => { const upd=sections.map(s=>s.id===activeSectionId?{...s,chords:[...s.chords,{chord:ch,beats:4}]}:s); setSections(upd); saveState(project,upd) }
+  const addChord = (ch) => { const upd=sections.map(s=>s.id===activeSectionId?{...s,chords:[...s.chords,{chordLabel:ch,beats:4}]}:s); setSections(upd); saveState(project,upd) }
   const removeLastChord = () => { const upd=sections.map(s=>{if(s.id!==activeSectionId||s.chords.length<=1)return s;const c=[...s.chords];c.pop();return{...s,chords:c}}); setSections(upd); saveState(project,upd) }
 
   // ── AI ───────────────────────────────────────────────────────────
-  const handleSendChat = async (e) => {
+  const handleAgentInteraction = async (agentType, e) => {
     e.preventDefault(); if(!chatInput.trim()||isLoadingAi) return
-    if(!isGeminiConfigured()){alert('Configura tu Gemini API Key en Ajustes primero.');return}
+    if(agentType === 'producer' && producerProvider === 'gemini' && !isGeminiConfigured()){alert('Configura tu Gemini API Key en Ajustes primero.');return}
+    
     const userMsg={id:`u-${Date.now()}`,sender:'user',message:chatInput.trim()}
-    const hist=[...chatHistory,userMsg]; setChatHistory(hist); setChatInput(''); setIsLoadingAi(true)
+    
+    const currentHistory = agentType === 'producer' ? producerHistory : mascotHistory;
+    const setHistory = agentType === 'producer' ? setProducerHistory : setMascotHistory;
+    const hist=[...currentHistory,userMsg]; 
+    setHistory(hist); 
+    setChatInput(''); 
+    setIsLoadingAi(true);
+
     try {
-      const ps={name:project.name,key_signature:project.key_signature,tempo_bpm:project.tempo_bpm,capo_position:project.capo_position,mood:project.mood,instruments,sections:sections.map(s=>({name:s.name,chords:s.chords}))}
-      const ai=await sendMessageToProducerAI(userMsg.message,hist,ps)
+      const context = {
+        masterJson,
+        uiFocus: { ...uiFocusContext, currentBeat: Math.floor(Tone.Transport.seconds * 2) },
+        opposingHistory: agentType === 'producer' ? mascotHistory.slice(-5) : producerHistory.slice(-5)
+      };
+
+      const ai = await sendMessageToAI({
+        agentType,
+        provider: agentType === 'producer' ? producerProvider : mascotProvider,
+        prompt: userMsg.message,
+        context
+      });
+
       const aMsg={id:`a-${Date.now()}`,sender:'assistant',message:ai.message||'Sin respuesta.'}
       let uProj={...project},uSecs=[...sections]; const ch=ai.changes
       if(ch&&Object.keys(ch).length>0){
@@ -404,16 +540,32 @@ export default function App() {
             }
           })
         }
-        if(ch.sections?.length){uSecs=ch.sections.map((s,i)=>({id:sections[i]?.id||`sec-ai-${Date.now()}-${i}`,name:s.name,order_index:s.order_index??i,chords:s.chords||[],melody:s.melody||sections[i]?.melody||[],accompaniment:sections[i]?.accompaniment||{guitar:'strum',piano:'arpeggio',bass:'roots',drums:'basic',strings:'pad',violin:'melody',vibraphone:'chords'}}))}
+        if(ch.sections?.length){
+          const aiTracks = ch.tracks || null;
+          uSecs=ch.sections.map((s,i)=>({
+            id:sections[i]?.id||`sec-ai-${Date.now()}-${i}`,
+            name:s.name,
+            order_index:s.order_index??i,
+            chords:s.chords||[],
+            melody:s.melody||sections[i]?.melody||[],
+            accompaniment:sections[i]?.accompaniment||{guitar:'strum',piano:'arpeggio',bass:'roots',drums:'basic',strings:'pad',violin:'melody',vibraphone:'chords'},
+            tracks: aiTracks || sections[i]?.tracks || null
+          }))
+        } else if (ch.tracks?.length) {
+          uSecs = sections.map(s => {
+            if (s.id === activeSectionId) return { ...s, tracks: ch.tracks };
+            return s;
+          });
+        }
         setProject(uProj); setSections(uSecs)
         if(uSecs.length>0&&!uSecs.find(s=>s.id===activeSectionId)) setActiveSectionId(uSecs[0].id)
-        const logParts=[ch.tempo_bpm&&`${ch.tempo_bpm} BPM`,ch.key_signature&&`Tono: ${ch.key_signature}`,ch.sections&&`${ch.sections.length} secciones`].filter(Boolean).join(' · ')
+        const logParts=[ch.tempo_bpm&&`${ch.tempo_bpm} BPM`,ch.key_signature&&`Tono: ${ch.key_signature}`,ch.sections&&`${ch.sections.length} secciones`,ch.tracks&&`${ch.tracks.length} tracks orquestados`].filter(Boolean).join(' · ')
         const log={id:`l-${Date.now()}`,sender:'system',message:`Cambios aplicados — ${logParts}`}
-        const final=[...hist,aMsg,log]; setChatHistory(final); saveState(uProj,uSecs,final)
+        const final=[...hist,aMsg,log]; setHistory(final); if(agentType === 'producer') saveState(uProj,uSecs,final)
       } else {
-        const final=[...hist,aMsg]; setChatHistory(final); saveState(project, sections, final)
+        const final=[...hist,aMsg]; setHistory(final); if(agentType === 'producer') saveState(project, sections, final)
       }
-    } catch(err){ setChatHistory(p=>[...p,{id:`e-${Date.now()}`,sender:'assistant',message:`Error: ${err.message}`}]) }
+    } catch(err){ setHistory(p=>[...p,{id:`e-${Date.now()}`,sender:'assistant',message:`Error: ${err.message}`}]) }
     finally{setIsLoadingAi(false)}
   }
 
@@ -462,324 +614,27 @@ export default function App() {
 
   // ── Timeline helpers ─────────────────────────────────────────────
   const activeSection = sections.find(s => s.id === activeSectionId)
-  const getChordAt = (bi) => { if(!activeSection)return''; let sum=0; for(const c of activeSection.chords){if(bi>=sum&&bi<sum+c.beats)return c.chord;sum+=c.beats}; return'' }
+  const getChordAt = (bi) => { if(!activeSection)return''; let sum=0; for(const c of activeSection.chords){if(bi>=sum&&bi<sum+c.beats)return c.chordLabel||c.chord||'';sum+=c.beats}; return'' }
   const isChordStart = (bi) => { if(!activeSection)return false; let sum=0; for(const c of activeSection.chords){if(bi===sum)return true;sum+=c.beats}; return false }
   const progress = totalBeats > 0 ? (currentBeat / totalBeats) * 100 : 0
 
   // ════════════════════════════════════════════════════════════════
-  //  DASHBOARD
-  // ════════════════════════════════════════════════════════════════
-  if (currentView === 'dashboard') return (
-    <div className="app-container dashboard-layout">
-      <aside className="dashboard-sidebar">
-        <div>
-          <div className="logo-wrap">
-            <div className="logo-icon">🎸</div>
-            <div>
-              <div className="logo-text">SinfonIA</div>
-              <div className="logo-sub">Music Studio</div>
-            </div>
-          </div>
-          <nav className="dashboard-menu">
-            <button className={`menu-item ${activeTab==='projects'?'active':''}`} onClick={()=>setActiveTab('projects')}><FolderOpen size={14}/> Proyectos</button>
-            <button className={`menu-item ${activeTab==='settings'?'active':''}`} onClick={()=>setActiveTab('settings')}><Settings size={14}/> API Keys</button>
-            <button className={`menu-item ${activeTab==='help'?'active':''}`}     onClick={()=>setActiveTab('help')}><BookOpen size={14}/> Guía</button>
-          </nav>
-        </div>
-        <div style={{display:'flex',flexDirection:'column',gap:6,padding:'0 4px'}}>
-          <div style={{display:'flex',gap:6,alignItems:'center',fontSize:11,color:'var(--c-text-3)'}}>
-            <HardDrive size={11}/><span>{dbStatus}</span>
-          </div>
-          {isSupabaseConfigured() && (
-            <button className="btn-ghost" onClick={()=>{const n=!useLocalMode;setUseLocalMode(n);localStorage.setItem('use_local_mode',String(n))}}>
-              {useLocalMode?'🔌 Conectar Supabase':'📴 Modo Local'}
-            </button>
-          )}
-        </div>
-      </aside>
-
-      <main className="dashboard-content">
-        {/* PROJECTS */}
-        {activeTab==='projects' && <>
-          <div style={{ maxWidth: '896px', margin: '32px auto 0', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', paddingBottom: '16px', borderBottom: '1px solid var(--c-border)' }}>
-            <div>
-              <h1 style={{ fontFamily: 'var(--font-mono, monospace)', letterSpacing: '-0.025em', fontSize: '24px', fontWeight: 600, margin: 0, color: '#fff' }}>Mis Proyectos</h1>
-              <p style={{ margin: '8px 0 0', fontSize: '14px', color: 'var(--c-text-2)' }}>Selecciona un proyecto para abrir el estudio</p>
-            </div>
-            <button className="btn-primary" onClick={handleCreateProject}><Plus size={13}/> Nuevo</button>
-          </div>
-
-          {dbStatus.includes('Error') && (
-            <div style={{padding:'10px 14px',background:'rgba(232,93,117,0.07)',border:'1px solid rgba(232,93,117,0.2)',color:'#f28c9d',fontSize:12,borderRadius:'var(--r-sm)'}}>
-              ⚠️ Error en Supabase — ejecuta <code>supabase/schema.sql</code> y desactiva el RLS.
-            </div>
-          )}
-
-          {projectsList.length===0 ? (
-            <div style={{padding:'48px 24px',textAlign:'center',border:'1px dashed var(--c-border)',borderRadius:'var(--r-lg)',color:'var(--c-text-2)'}}>
-              <Music size={36} style={{margin:'0 auto 12px',opacity:.25}}/>
-              <p style={{marginBottom:14,fontSize:13}}>No tienes proyectos aún.</p>
-              <button className="btn-primary" onClick={handleCreateProject} style={{margin:'0 auto'}}>Crear mi primer proyecto</button>
-            </div>
-          ) : (
-            <div style={{ padding: '32px 0', maxWidth: '896px', margin: '0 auto' }}>
-              {projectsList.map(p=>(
-                <div 
-                  key={p.id} 
-                  style={{ backgroundColor: '#121214', border: '1px solid #27272a', borderRadius: '8px', padding: '16px', marginBottom: '12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer', transition: 'border-color 0.2s ease' }}
-                  onMouseEnter={e => e.currentTarget.style.borderColor = '#52525b'}
-                  onMouseLeave={e => e.currentTarget.style.borderColor = '#27272a'}
-                  onClick={()=>handleSelectProject(p)}
-                >
-                  
-                  {/* Izquierda: Información del Proyecto */}
-                  <div style={{ position: 'relative', zIndex: 2 }}>
-                    <div style={{ fontSize: '15px', fontWeight: 600, color: '#fff', marginBottom: '4px' }}>{p.name}</div>
-                    <div style={{ fontSize: '12px', color: 'var(--c-text-3)', display: 'flex', gap: '8px', alignItems: 'center' }}>
-                      <span>{p.tempo_bpm} BPM</span>
-                      <span>·</span>
-                      <span>{p.key_signature}</span>
-                      {p.mood && <><span>·</span><span>{p.mood}</span></>}
-                      <span>·</span>
-                      <span>{new Date(p.updated_at).toLocaleDateString()}</span>
-                    </div>
-                  </div>
-
-                  {/* Derecha: Botones de Acción */}
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '16px', position: 'relative', zIndex: 2 }}>
-                    <button 
-                      style={{ backgroundColor: '#e4e4e7', color: '#000', padding: '6px 12px', borderRadius: '6px', fontSize: '12px', fontWeight: 600, border: 'none', cursor: 'pointer', transition: 'background-color 0.2s ease' }}
-                      onMouseEnter={e => e.currentTarget.style.backgroundColor = '#ffffff'}
-                      onMouseLeave={e => e.currentTarget.style.backgroundColor = '#e4e4e7'}
-                      onClick={(e) => { e.stopPropagation(); handleSelectProject(p); }}
-                    >
-                      Abrir Estudio
-                    </button>
-                    <Trash2 
-                      size={18} 
-                      style={{ color: '#71717a', cursor: 'pointer', transition: 'color 0.2s ease' }} 
-                      onMouseEnter={e => e.currentTarget.style.color = '#fb7185'}
-                      onMouseLeave={e => e.currentTarget.style.color = '#71717a'}
-                      onClick={(e) => handleDeleteProject(p.id, e)} 
-                    />
-                  </div>
-
-                </div>
-              ))}
-            </div>
-          )}
-        </>}
-
-        {/* SETTINGS */}
-        {activeTab==='settings' && (
-          <div style={{maxWidth:500}}>
-            <div className="page-header" style={{flexDirection:'column',alignItems:'flex-start',gap:4}}>
-              <h1 className="page-title">Configuración de API</h1>
-              <p className="page-subtitle">Conecta tus servicios de IA para activar todas las funciones.</p>
-            </div>
-            <form onSubmit={handleSaveSettings} style={{display:'flex',flexDirection:'column',gap:16}}>
-              <div className="form-group">
-                <label className="form-label">Gemini API Key</label>
-                <div style={{display:'flex',gap:6}}>
-                  <input type="password" placeholder="AIzaSy…" value={geminiKey} onChange={e=>setGeminiKey(e.target.value)} className="chat-input"/>
-                  <button type="button" onClick={testGeminiConnection} className="btn-secondary" disabled={isTestingGemini}>{isTestingGemini?'…':'Probar'}</button>
-                </div>
-                <span style={{fontSize:11,color:'var(--c-text-3)'}}>Obtén tu clave en <a href="https://aistudio.google.com/" target="_blank" rel="noreferrer" style={{color:'var(--teal)'}}>Google AI Studio</a></span>
-                {geminiTestResult&&(
-                  <div style={{fontSize:11.5,padding:'7px 10px',background:geminiTestResult.includes('✅')?'rgba(62,201,124,0.07)':'rgba(232,93,117,0.07)',border:`1px solid ${geminiTestResult.includes('✅')?'rgba(62,201,124,0.25)':'rgba(232,93,117,0.25)'}`,color:geminiTestResult.includes('✅')?'var(--c-ok)':'var(--c-danger)',borderRadius:'var(--r-sm)'}}>
-                    {geminiTestResult}
-                  </div>
-                )}
-              </div>
-              <div style={{height:1,background:'var(--c-border)'}}/>
-              <div className="form-group">
-                <label className="form-label">Supabase URL <span style={{color:'var(--c-text-3)',textTransform:'none',fontSize:10,fontWeight:400}}>(opcional)</span></label>
-                <input type="text" placeholder="https://xyz.supabase.co" value={supabaseUrl} onChange={e=>setSupabaseUrl(e.target.value)} className="chat-input"/>
-              </div>
-              <div className="form-group">
-                <label className="form-label">Supabase Anon Key <span style={{color:'var(--c-text-3)',textTransform:'none',fontSize:10,fontWeight:400}}>(opcional)</span></label>
-                <input type="password" placeholder="eyJhbGciOi…" value={supabaseKey} onChange={e=>setSupabaseKey(e.target.value)} className="chat-input"/>
-              </div>
-              <button type="submit" className="btn-primary" style={{alignSelf:'flex-start'}}>Guardar y Recargar</button>
-            </form>
-          </div>
-        )}
-
-        {/* HELP */}
-        {activeTab==='help' && (
-          <div style={{maxWidth:640,display:'flex',flexDirection:'column',gap:12}}>
-            <div className="page-header" style={{flexDirection:'column',alignItems:'flex-start',gap:4,paddingBottom:16}}>
-              <h1 className="page-title">Guía de SinfonIA</h1>
-              <p className="page-subtitle">Aprende a usar todas las funciones del estudio.</p>
-            </div>
-            {[
-              {icon:'🎙️',color:'var(--teal)',      title:'Productor IA — Gemini 2.5 Flash',text:'Describe el sentimiento de tu canción y el productor ajustará automáticamente los acordes, el tempo y la tonalidad.'},
-              {icon:'🧠',color:'var(--c-warn)',     title:'Análisis Pro — Gemini 2.5 Flash',text:'Análisis profundo de la armonía, sugerencias de guitarra específicas y técnicas de arpegio para cada sección.'},
-              {icon:'🎨',color:'var(--c-info)',     title:'Arte de Portada (Canvas)',       text:'Genera una portada personalizada basada en el nombre y el mood de tu canción. (Imagen 3 requiere plan de pago.)'},
-              {icon:'🎸',color:'var(--c-ok)',       title:'Diapasón Interactivo',           text:'Visualiza acordes y escalas en el mástil. Haz clic en cualquier nota para escucharla en tiempo real.'},
-            ].map(({icon,color,title,text})=>(
-              <div key={title} className="info-panel">
-                <h3 style={{color}}>{icon} {title}</h3>
-                <p>{text}</p>
-              </div>
-            ))}
-          </div>
-        )}
-      </main>
-    </div>
-  )
-
-  // ════════════════════════════════════════════════════════════════
-  //  EDITOR SINFONIA PRO
+  //  LAYOUT SINFONIA PRO (V7)
   // ════════════════════════════════════════════════════════════════
   return (
-    <div className="pro-layout" onClick={() => setFocusedZone('canvas')}>
-      {/* ── BARRA DE TRANSPORTE ── */}
-      <header className={`pro-transport focus-zone ${focusedZone === 'transport' ? 'is-focused' : ''}`} onClick={(e) => { e.stopPropagation(); setFocusedZone('transport') }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-          <button className="btn-ghost" onClick={() => setCurrentView('dashboard')}><ChevronLeft size={16}/> Proyectos</button>
-          <span style={{ fontFamily: 'var(--font-head)', fontWeight: 600 }}>{project?.name || 'SinfonIA Pro'}</span>
-        </div>
-        
-        <div className="lcd-display">
-          <div className="lcd-section">
-            <span className="lcd-label">POS</span>
-            <span className="lcd-value">001:01:01</span>
-          </div>
-          <div className="lcd-section">
-            <span className="lcd-label">TIME</span>
-            <span className="lcd-value">00:00.000</span>
-          </div>
-          <div className="lcd-section">
-            <span className="lcd-label">BPM</span>
-            <span className="lcd-value accent">{(project?.tempo_bpm || 120).toFixed(2)}</span>
-          </div>
-          <div className="lcd-section">
-            <span className="lcd-label">KEY</span>
-            <span className="lcd-value accent">{project?.key_signature || 'C'}</span>
-          </div>
-          <div className="lcd-section">
-            <span className="lcd-label">CPU LOAD</span>
-            <span className="lcd-value">{audioPerf.cpu}%</span>
-          </div>
-          <div className="lcd-section">
-            <span className="lcd-label">MEM</span>
-            <span className="lcd-value">{audioPerf.memory}MB</span>
-          </div>
-        </div>
-
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <button className="btn-secondary" onClick={handlePlayToggle}>{isPlaying ? <Pause size={14}/> : <Play size={14}/>}</button>
-          <button className="btn-secondary" onClick={handleStop}><Square size={14}/></button>
-          <button className="btn-amber" onClick={handleRunAnalysis}><Sparkles size={14}/> Análisis</button>
-        </div>
-      </header>
-
-      {/* ── COLUMNA IZQUIERDA: CHAT IA ── */}
-      <aside className={`pro-column pro-column-chat focus-zone ${focusedZone === 'chat' ? 'is-focused' : ''}`} onClick={(e) => { e.stopPropagation(); setFocusedZone('chat') }}>
-        <header className="chat-header">
-          <div className="chat-producer-badge">
-            <span className="chat-producer-label">Productor IA</span>
-          </div>
-        </header>
-        <div className="chat-messages">
-          {chatHistory.map(msg=>
-            msg.sender==='system'
-              ? <div key={msg.id} className="message-system-log">{msg.message}</div>
-              : <div key={msg.id} className={`message-bubble ${msg.sender==='user'?'message-user':'message-assistant'}`}>{msg.message}</div>
-          )}
-          {isLoadingAi&&<div className="message-bubble message-assistant" style={{opacity:.6,fontStyle:'italic'}}>Analizando espectro…</div>}
-          <div ref={chatEndRef}/>
-        </div>
-        <form onSubmit={handleSendChat} className="chat-input-area">
-          <input type="text" placeholder="Asistente listo..." value={chatInput} onChange={e=>setChatInput(e.target.value)} className="chat-input" disabled={isLoadingAi}/>
-          <button type="submit" className="btn-primary" disabled={isLoadingAi||!chatInput.trim()}><Send size={14}/></button>
-        </form>
-      </aside>
-
-      {/* ── COLUMNA CENTRAL: CANVAS & DOCK ── */}
-      <main className={`pro-column pro-column-center focus-zone ${focusedZone === 'canvas' ? 'is-focused' : ''}`} onClick={(e) => { e.stopPropagation(); setFocusedZone('canvas') }}>
-        <div className="canvas-area">
-          <div className="glass-panel">
-            <Fretboard
-              keySignature={project?.key_signature}
-              activeChord={isPlaying?currentChord:(activeSection?.chords?.[0]?.chord||'')}
-              capoPosition={project?.capo_position}
-              onPlayNote={playFretNote}
-              currentBeat={currentBeat}
-              isPlaying={isPlaying}
-            />
-          </div>
-          
-          {/* Cuadro de Acorde Activo Limpio */}
-          { (isPlaying ? currentChord : (activeSection?.chords?.[0]?.chord)) && (
-            <div style={{ marginTop: '16px', display: 'flex', justifyContent: 'center', background: 'rgba(0,0,0,0.3)', padding: '12px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.05)' }}>
-              <GuitarChordDiagram chordName={isPlaying ? currentChord : (activeSection?.chords?.[0]?.chord)} />
-            </div>
-          )}
-        </div>
-
-        {/* Dock Inferior */}
-        <div className={`pro-dock focus-zone ${activeMidiTrack ? 'is-open' : ''} ${focusedZone === 'dock' ? 'is-focused' : ''}`} onClick={(e) => { e.stopPropagation(); setFocusedZone('dock') }}>
-          <div className="dock-header">
-            <span>Editor MIDI: {activeMidiTrack || 'Ninguno'}</span>
-            <button className="btn-ghost" onClick={() => setActiveMidiTrack(null)}>Cerrar ×</button>
-          </div>
-          {activeMidiTrack && (
-             <div style={{ flex: 1, padding: 16 }}>
-               <PianoRoll
-                  totalBeats={totalBeats}
-                  melody={activeSection?.melody || []}
-                  currentBeat={currentBeat}
-                  isPlaying={isPlaying}
-                  onPlayNote={(note) => { playNote(note, "8n"); }}
-                  onMelodyChange={(newMelody) => {
-                    const upd = sections.map(s => s.id === activeSectionId ? { ...s, melody: newMelody } : s)
-                    setSections(upd)
-                    saveState(project, upd)
-                  }}
-                />
-             </div>
-          )}
-        </div>
-      </main>
-
-      {/* ── COLUMNA DERECHA: RACK INSTRUMENTOS ── */}
-      <aside className={`pro-column pro-column-rack focus-zone ${focusedZone === 'rack' ? 'is-focused' : ''}`} onClick={(e) => { e.stopPropagation(); setFocusedZone('rack') }}>
-        <div className="rack-header">Rack de Instrumentos</div>
-        <div className="rack-content">
-          {masterJson.tracks && masterJson.tracks.map(track => (
-            <div key={track.id} className="rack-module">
-              <div className="rack-module-header">
-                <span className="rack-module-title">{track.id.toUpperCase()}</span>
-                <div className="rack-controls">
-                  <button className={`btn-mute-solo ${track.mute ? 'm-active' : ''}`} onClick={() => handleToggleMute(track.id)}>M</button>
-                  <button className={`btn-mute-solo ${track.solo ? 's-active' : ''}`} onClick={() => handleToggleSolo(track.id)}>S</button>
-                </div>
-              </div>
-              <input type="range" min="-40" max="10" defaultValue="0" onChange={(e) => handleTrackVolume(track.id, e.target.value)} className="pro-fader" />
-              <button className={`btn-secondary ${activeMidiTrack === track.id ? 'is-active' : ''}`} onClick={() => setActiveMidiTrack(activeMidiTrack === track.id ? null : track.id)}>
-                {activeMidiTrack === track.id ? 'Cerrar Editor' : 'Editar MIDI'}
-              </button>
-            </div>
-          ))}
-        </div>
-      </aside>
-
-      {/* ── MODAL ANÁLISIS ── */}
-      {isAnalysisOpen && (
-        <div className="modal-overlay" onClick={()=>setIsAnalysisOpen(false)}>
-          <div className="modal-content" onClick={e=>e.stopPropagation()}>
-            <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',paddingBottom:16,borderBottom:'1px solid var(--c-border)'}}>
-              <h2 style={{fontSize:16,fontWeight:500,color:'var(--accent-cyan)',display:'flex',alignItems:'center',gap:8}}><Sparkles size={16}/> Análisis IA</h2>
-              <button onClick={()=>setIsAnalysisOpen(false)} className="btn-ghost">×</button>
-            </div>
-            <div style={{fontSize:13,lineHeight:1.75,color:'var(--c-text-2)',whiteSpace:'pre-wrap',maxHeight:'60vh',overflowY:'auto', paddingTop:16}}>
-              {analysisResult}
-            </div>
-          </div>
-        </div>
-      )}
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', width: '100vw', overflow: 'hidden', backgroundColor: 'var(--c-bg)' }}>
+      <ControlBar 
+        project={project} 
+        isPlaying={isPlaying} 
+        onPlayToggle={handlePlayToggle} 
+        onStop={handleStop} 
+        activeTab={uiFocusContext.activeTab} 
+        onTabChange={(tab) => updateUIFocus({ activeTab: tab })} 
+      />
+      <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
+        <AIManagerPanel uiFocusContext={uiFocusContext} mascotAlert={mascotAlert} />
+        <WorkspaceContainer activeTab={uiFocusContext.activeTab} />
+      </div>
     </div>
-  )
+  );
 }

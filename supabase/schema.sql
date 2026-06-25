@@ -23,6 +23,7 @@ CREATE TABLE IF NOT EXISTS sections (
     order_index INTEGER NOT NULL, -- Orden de las secciones
     chords JSONB DEFAULT '[]'::jsonb, -- Ej: [{"chord": "Am", "beats": 4}, {"chord": "F", "beats": 4}]
     melody JSONB DEFAULT '[]'::jsonb, -- Opcional: Arreglo de notas
+    tracks JSONB DEFAULT NULL, -- Detalles precisos y articulaciones del Productor IA
     accompaniment JSONB DEFAULT '{"guitar": {"active": true, "type": "strum"}, "piano": {"active": true, "type": "arpeggio"}, "bass": {"active": true, "type": "roots"}, "drums": {"active": true, "type": "basic"}, "strings": {"active": false, "type": "pad"}, "violin": {"active": false, "type": "melody"}, "vibraphone": {"active": false, "type": "chords"}}'::jsonb,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );

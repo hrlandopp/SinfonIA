@@ -9,6 +9,12 @@ const midiToNoteName = (midiNumber) => {
   return notes[midiNumber % 12]
 }
 
+const midiToScientificPitch = (midiNumber) => {
+  const notes = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
+  const octave = Math.floor(midiNumber / 12) - 1;
+  return `${notes[midiNumber % 12]}${octave}`
+}
+
 const SCALES = {
   'Mayor': [0, 2, 4, 5, 7, 9, 11],
   'Menor': [0, 2, 3, 5, 7, 8, 10],
@@ -33,7 +39,8 @@ const parseKeySignature = (keySig) => {
 
 export default function Fretboard({ 
   keySignature = 'C', 
-  activeChord = '', 
+  activeChordLabel = '', // Para visualización
+  activeNotes = [],      // ¡NUEVO! Array dinámico de notas crudas (ej. ['E3', 'G3', 'C4'])
   capoPosition = 0, 
   onPlayNote,
   currentBeat = 0,
@@ -42,7 +49,6 @@ export default function Fretboard({
   const numFrets = 15
   const { root: scaleRoot, scaleType } = parseKeySignature(keySignature)
   const scaleIntervals = SCALES[scaleType] || SCALES['Mayor']
-  const activeChordNotes = parseChordNotes(activeChord, 0).map(n => n.slice(0, -1))
   
   const getScaleNotes = () => {
     const notesList = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
@@ -66,18 +72,21 @@ export default function Fretboard({
     const effectiveFret = fret === 0 ? capoPosition : fret
     const midiVal = baseMidi + effectiveFret
     const noteName = midiToNoteName(midiVal)
+    const scientificPitch = midiToScientificPitch(midiVal)
     
     const isRoot = noteName === scaleRoot
     const isScaleNote = scaleNotes.includes(noteName)
-    const isChordNote = activeChordNotes.includes(noteName)
+    // Se ilumina si la nota exacta (ej 'E4') o la nota genérica (ej 'E') están en el array
+    const isActiveNote = activeNotes.includes(scientificPitch) || activeNotes.includes(noteName)
     
     return {
       noteName,
+      scientificPitch,
       midiVal,
       isPlayable: true,
       isRoot,
       isScaleNote,
-      isChordNote
+      isActiveNote
     }
   }
 
@@ -89,8 +98,8 @@ export default function Fretboard({
           <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
             Tonalidad: <strong style={{ color: 'var(--text-primary)' }}>{keySignature}</strong> ({scaleType})
             {capoPosition > 0 && ` | Capo en traste ${capoPosition}`}
-            {activeChord && ` | Acorde actual: `}
-            {activeChord && <strong style={{ color: isPlaying ? 'var(--accent-cyan)' : 'var(--text-primary)' }}>{activeChord}</strong>}
+            {activeChordLabel && ` | Acorde actual: `}
+            {activeChordLabel && <strong style={{ color: isPlaying ? 'var(--accent-cyan)' : 'var(--text-primary)' }}>{activeChordLabel}</strong>}
           </p>
           {isPlaying && (
             <div style={{ 
@@ -113,7 +122,7 @@ export default function Fretboard({
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', fontSize: '0.75rem' }}>
             <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'var(--accent-cyan)' }}></span>
-            <span>Acorde ({activeChord || 'Ninguno'})</span>
+            <span>Nota Activa</span>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', fontSize: '0.75rem' }}>
             <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'rgba(255,255,255,0.85)', border: '1px solid var(--accent-indigo)' }}></span>
@@ -184,15 +193,15 @@ export default function Fretboard({
                     style={{ flex: 1, minWidth: '45px', height: '100%', borderRight: '1px solid rgba(255,255,255,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' }}
                     onClick={() => noteInfo.isPlayable && onPlayNote && onPlayNote(noteInfo.noteName, noteInfo.midiVal)}
                   >
-                    {noteInfo.isPlayable && (noteInfo.isScaleNote || noteInfo.isChordNote) && (
+                    {noteInfo.isPlayable && (noteInfo.isScaleNote || noteInfo.isActiveNote) && (
                       <button 
                         className={`fret-note-node ${
                           noteInfo.isRoot ? 'fret-note-root' : 
-                          noteInfo.isChordNote ? 'fret-note-chord' : 
+                          noteInfo.isActiveNote ? 'fret-note-chord' : 
                           'fret-note-scale'
                         }`}
-                        style={{ width:'22px', height:'22px', borderRadius:'50%', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'10px', zIndex:10, cursor:'pointer', border:'none', fontWeight:'bold', color: '#fff', background: noteInfo.isRoot ? 'var(--accent-rose)' : noteInfo.isChordNote ? 'var(--accent-cyan)' : 'rgba(255,255,255,0.15)' }}
-                        title={`${noteInfo.noteName} (Traste ${fretIdx})`}
+                        style={{ width:'22px', height:'22px', borderRadius:'50%', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'10px', zIndex:10, cursor:'pointer', border:'none', fontWeight:'bold', color: '#fff', background: noteInfo.isRoot ? 'var(--accent-rose)' : noteInfo.isActiveNote ? 'var(--accent-cyan)' : 'rgba(255,255,255,0.15)' }}
+                        title={`${noteInfo.scientificPitch} (Traste ${fretIdx})`}
                       >
                         {noteInfo.noteName}
                       </button>
