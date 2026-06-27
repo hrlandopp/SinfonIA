@@ -1,5 +1,4 @@
 import React from 'react'
-import { parseChordNotes } from '../utils/musicTheory'
 
 const STANDARD_TUNING = [64, 59, 55, 50, 45, 40]
 const STRING_NAMES = ['E', 'B', 'G', 'D', 'A', 'E']

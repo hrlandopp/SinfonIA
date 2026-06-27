@@ -1,15 +1,12 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import { useAIAgents } from '../hooks/useAIAgents';
+import { useUIStore } from '../store/useUIStore';
 
-const AIManagerPanel = React.memo(({ 
-  uiFocusContext, 
-  mascotAlert, 
-  producerHistory, 
-  mascotHistory, 
-  chatInput, 
-  setChatInput, 
-  handleAgentInteraction, 
-  requestMascotHelp 
-}) => {
+const AIManagerPanel = React.memo(() => {
+  const [chatInput, setChatInput] = useState('');
+  const { producerHistory, mascotHistory, isLoadingAi, handleAgentInteraction, requestMascotHelp } = useAIAgents();
+  const { mascotAlert } = useUIStore();
+  
   const producerEndRef = useRef(null);
   const mascotEndRef = useRef(null);
 
@@ -69,7 +66,7 @@ const AIManagerPanel = React.memo(({
                 {msg.message}
               </div>
             )) : (
-              <div style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', color: 'var(--c-text-3)' }}>// NO_HISTORY</div>
+              <div style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', color: 'var(--c-text-3)' }}>{"// NO_HISTORY"}</div>
             )}
             <div ref={producerEndRef} />
           </div>
@@ -78,7 +75,12 @@ const AIManagerPanel = React.memo(({
               type="text" 
               value={chatInput}
               onChange={(e) => setChatInput(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && handleAgentInteraction('producer', e)}
+              onKeyDown={(e) => {
+                if(e.key === 'Enter') {
+                  handleAgentInteraction('producer', chatInput);
+                  setChatInput('');
+                }
+              }}
               placeholder="ENTER_COMMAND..."
               style={{
                 width: '100%',
@@ -92,7 +94,11 @@ const AIManagerPanel = React.memo(({
               }}
             />
             <button 
-              onClick={(e) => handleAgentInteraction('producer', e)}
+              onClick={() => {
+                handleAgentInteraction('producer', chatInput);
+                setChatInput('');
+              }}
+              disabled={isLoadingAi}
               style={{
                 width: '100%',
                 padding: '6px',
@@ -101,7 +107,7 @@ const AIManagerPanel = React.memo(({
                 color: 'var(--c-text-1)',
                 fontFamily: 'var(--font-mono)',
                 fontSize: '10px',
-                cursor: 'pointer'
+                cursor: isLoadingAi ? 'wait' : 'pointer'
               }}
               onMouseEnter={e => e.currentTarget.style.backgroundColor = 'var(--c-surface)'}
               onMouseLeave={e => e.currentTarget.style.backgroundColor = 'var(--c-elevated)'}
@@ -154,7 +160,7 @@ const AIManagerPanel = React.memo(({
               </>
             ) : (
               <div style={{ fontSize: '10px', color: '#10b981', fontFamily: 'var(--font-mono)' }}>
-                SYSTEM_STATUS: NOMINAL // NO_ANOMALIES_DETECTED
+                {"SYSTEM_STATUS: NOMINAL // NO_ANOMALIES_DETECTED"}
               </div>
             )}
           </div>
@@ -171,7 +177,7 @@ const AIManagerPanel = React.memo(({
                 {msg.message}
               </div>
             )) : (
-              <div style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', color: 'var(--c-text-3)' }}>// MICRO_AGENT_STANDBY</div>
+              <div style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', color: 'var(--c-text-3)' }}>{"// MICRO_AGENT_STANDBY"}</div>
             )}
             <div ref={mascotEndRef} />
           </div>
@@ -180,5 +186,7 @@ const AIManagerPanel = React.memo(({
     </aside>
   );
 });
+
+AIManagerPanel.displayName = 'AIManagerPanel';
 
 export default AIManagerPanel;

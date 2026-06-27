@@ -1,4 +1,4 @@
-import { useEffect, useRef, useCallback } from 'react';
+import { useEffect, useRef, useCallback, useState } from 'react';
 import * as Tone from 'tone';
 import { applyStrumming, applyGroove, applyArticulationParams, evaluateHarmonicClash, reduceToDyad } from '../utils/musicLogic';
 
@@ -85,10 +85,14 @@ const STRUM_ARTICULATIONS = {
 const GROOVE_ARTICULATIONS = ['syncopated'];
 
 export const useAudioEngine = (masterJson, onBeatTick, isFullSongMode = true) => {
+  const [isAudioLoaded, setIsAudioLoaded] = useState(false);
+
   // Referencias para mantener las instancias en memoria sin provocar re-renders en React
   const instrumentsRef = useRef({});
   const partsRef = useRef({});
   const channelsRef = useRef({});
+  const sequencesHashRef = useRef({});
+  const autoStopEventRef = useRef(null);
 
   // ---------------------------------------------------------
   // 1. INICIALIZACIÓN DE INSTRUMENTOS (Se ejecuta una sola vez)
@@ -110,7 +114,7 @@ export const useAudioEngine = (masterJson, onBeatTick, isFullSongMode = true) =>
           urls: config.urls,
           baseUrl: config.baseUrl,
           onload: () => {
-            if (isMounted) console.log(`🎵 Instrumento cargado exitosamente: ${instrumentName}`);
+            if (isMounted) console.log(`🎵 Instrumento cargado en memoria: ${instrumentName}`);
           }
         }).connect(channel);
 
@@ -128,7 +132,15 @@ export const useAudioEngine = (masterJson, onBeatTick, isFullSongMode = true) =>
       }).connect(drumsChannel);
       instrumentsRef.current['drums'] = drumsSynth;
 
-      console.log("🎧 Motor de audio inicializado con orquesta completa y micro-timing habilitado.");
+      console.log("🎧 Motor de audio inicializado. Esperando descarga de samples...");
+      
+      // Wait for all samples to be loaded in Tone.js buffers
+      await Tone.loaded();
+      
+      if (isMounted) {
+        setIsAudioLoaded(true);
+        console.log("✅ Samples cargados. El motor está listo.");
+      }
     };
 
     initAudio();
@@ -159,7 +171,7 @@ export const useAudioEngine = (masterJson, onBeatTick, isFullSongMode = true) =>
 
   // ---------------------------------------------------------
   // 2. REACCIÓN AL JSON MAESTRO (Programación de Secuencias)
-  //    Con soporte para micro-timing, humanización y articulaciones
+  //    Con soporte para micro-timing, humanización y articulaciones (DELTA UPDATES)
   // ---------------------------------------------------------
   useEffect(() => {
     if (!masterJson) return;
@@ -183,21 +195,6 @@ export const useAudioEngine = (masterJson, onBeatTick, isFullSongMode = true) =>
             paramRef.exponentialRampToValueAtTime(auto.endValue, endSeconds);
           }
         }
-      });
-    }
-
-    // CLEAN-UP DE PARTES ANTERIORES: Destruir secuencias viejas antes de crear nuevas
-    Object.values(partsRef.current).forEach((part) => {
-      if (part && typeof part.dispose === 'function') {
-        part.dispose();
-      }
-    });
-    partsRef.current = {};
-
-    // NUEVO: Cortar agresivamente el "tail" (envolventes) de los samplers en reproducción
-    if (Tone.Transport.state === 'started') {
-      Object.values(instrumentsRef.current).forEach(instrument => {
-         if (instrument.releaseAll) instrument.releaseAll();
       });
     }
 
@@ -247,8 +244,9 @@ export const useAudioEngine = (masterJson, onBeatTick, isFullSongMode = true) =>
       });
     }
 
-    // C. Línea de Tiempo Secuencial Absoluta
+    // C. Línea de Tiempo Secuencial Absoluta (DELTA UPDATES)
     let absoluteBeatOffset = 0;
+    const activeSequenceKeys = new Set();
     
     const sectionsToPlay = (isFullSongMode && masterJson.sectionsData) 
       ? masterJson.sectionsData 
@@ -273,6 +271,9 @@ export const useAudioEngine = (masterJson, onBeatTick, isFullSongMode = true) =>
         if (!instrument || !track.sequences) return;
 
         track.sequences.forEach(seq => {
+          const partKey = `${seq.id}_${sec.id || absoluteBeatOffset}`;
+          activeSequenceKeys.add(partKey);
+
           let processedNotes = [...(seq.notes || [])];
 
           // ── PROCESAMIENTO DE ARTICULACIONES ──
@@ -316,6 +317,18 @@ export const useAudioEngine = (masterJson, onBeatTick, isFullSongMode = true) =>
           // ── APLICAR ARTICULACIONES (staccato, legato, apoyado, tirando) ──
           processedNotes = processedNotes.map(n => applyArticulationParams(n));
 
+          // ── DELTA UPDATE CHECK ──
+          const currentHash = JSON.stringify(processedNotes);
+          if (sequencesHashRef.current[partKey] === currentHash && partsRef.current[partKey]) {
+            // Secuencia idéntica. Tone.js ya la tiene perfecta. Evitamos lag y clipping de envolventes.
+            return;
+          }
+
+          // Si cambió, destruimos la versión vieja y creamos la nueva
+          if (partsRef.current[partKey]) {
+            partsRef.current[partKey].dispose();
+          }
+
           // ── CREAR Tone.Part CON MICRO-TIMING Y OFFSET ABSOLUTO ──
           const part = new Tone.Part((time, noteValue) => {
             const microOffset = noteValue.timeOffset || 0;
@@ -330,8 +343,9 @@ export const useAudioEngine = (masterJson, onBeatTick, isFullSongMode = true) =>
           const partStart = seq.absoluteStartTime || startTimeOffset;
           part.start(partStart);
 
-          // Guardar en la referencia para limpieza posterior
-          partsRef.current[`${seq.id}_${sec.id || absoluteBeatOffset}`] = part;
+          // Guardar en la referencia para el próximo Delta Check
+          partsRef.current[partKey] = part;
+          sequencesHashRef.current[partKey] = currentHash;
         });
       });
 
@@ -339,9 +353,22 @@ export const useAudioEngine = (masterJson, onBeatTick, isFullSongMode = true) =>
       absoluteBeatOffset += sectionBeats;
     });
 
+    // ── GARBAGE COLLECTION (Limpiar secuencias huérfanas) ──
+    Object.keys(partsRef.current).forEach(partKey => {
+      if (!activeSequenceKeys.has(partKey)) {
+        if (partsRef.current[partKey]) partsRef.current[partKey].dispose();
+        delete partsRef.current[partKey];
+        delete sequencesHashRef.current[partKey];
+      }
+    });
+
     // ── PARADA AUTOMÁTICA INTELIGENTE ──
+    if (autoStopEventRef.current !== null) {
+      Tone.Transport.clear(autoStopEventRef.current);
+    }
+
     if (absoluteBeatOffset > 0) {
-      Tone.Transport.schedule((time) => {
+      autoStopEventRef.current = Tone.Transport.schedule((time) => {
         Tone.Transport.stop(time);
         console.log("⏹️ Auto-Stop: Composición finalizada en el beat absoluto", absoluteBeatOffset);
       }, `${absoluteBeatOffset} * 4n`);
@@ -418,6 +445,7 @@ export const useAudioEngine = (masterJson, onBeatTick, isFullSongMode = true) =>
     play,
     stop,
     playNote,
-    playChord
+    playChord,
+    isAudioLoaded
   };
 };

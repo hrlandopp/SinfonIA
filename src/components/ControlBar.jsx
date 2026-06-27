@@ -1,7 +1,32 @@
 import React from 'react';
-import { Play, Pause, Square } from 'lucide-react';
+import { Play, Pause, Square, Download, Undo2, Redo2 } from 'lucide-react';
+import { useProjectStore } from '../store/useProjectStore';
+import { useUIStore } from '../store/useUIStore';
+import { usePlaybackControls } from '../context/PlaybackContext';
+import { exportProjectToMIDI } from '../utils/exportUtils';
 
-const ControlBar = ({ project, isPlaying, onPlayToggle, onStop, activeTab, onTabChange }) => {
+const ControlBar = () => {
+  const { project, masterJson } = useProjectStore();
+  const { undo, redo, pastStates, futureStates } = useProjectStore.temporal(state => state);
+  
+  const { uiFocusContext, updateUIFocus } = useUIStore();
+  const { isPlaying, setIsPlaying, playNote } = usePlaybackControls();
+  const activeTab = uiFocusContext?.activeTab || 'editor';
+
+  const handlePlayToggle = () => setIsPlaying(!isPlaying);
+  const handleStop = () => setIsPlaying(false);
+
+  const handleExportMidi = () => {
+    if (!masterJson || (!masterJson.sectionsData && !masterJson.tracks)) {
+      alert("No hay secuencias generadas para exportar.");
+      return;
+    }
+    const success = exportProjectToMIDI(masterJson);
+    if (!success) {
+      alert("Ocurrió un error al exportar la pista MIDI. Revisa la consola.");
+    }
+  };
+
   return (
     <div style={{
       display: 'flex',
@@ -19,16 +44,62 @@ const ControlBar = ({ project, isPlaying, onPlayToggle, onStop, activeTab, onTab
         <div style={{ fontSize: '14px', fontWeight: '600', fontFamily: 'var(--font-head)' }}>
           {project?.name || 'SinfonIA Pro'}
         </div>
-        <div style={{ display: 'flex', gap: '16px', fontFamily: 'var(--font-mono)', fontSize: '12px', color: 'var(--c-text-2)' }}>
+        <div style={{ display: 'flex', gap: '16px', fontFamily: 'var(--font-mono)', fontSize: '12px', color: 'var(--c-text-2)', alignItems: 'center' }}>
           <div>BPM: <span style={{ color: 'var(--c-text-1)' }}>{project?.tempo_bpm || 120}</span></div>
           <div>KEY: <span style={{ color: 'var(--c-text-1)' }}>{project?.key_signature || 'C'}</span></div>
+          <button 
+            onClick={handleExportMidi}
+            title="Exportar a MIDI"
+            style={{
+              background: 'transparent',
+              border: '1px solid var(--c-border-focus)',
+              color: 'var(--c-text-1)',
+              padding: '4px 8px',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              borderRadius: '4px'
+            }}
+          >
+            <Download size={12} /> <span style={{ fontSize: '10px', textTransform: 'uppercase' }}>MIDI</span>
+          </button>
         </div>
       </div>
 
-      {/* Transport Controls */}
-      <div style={{ display: 'flex', gap: '8px' }}>
+      {/* Transport Controls & History */}
+      <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
         <button 
-          onClick={onPlayToggle}
+          onClick={() => undo()}
+          disabled={pastStates.length === 0}
+          title="Deshacer"
+          style={{
+            background: 'transparent',
+            border: 'none',
+            color: pastStates.length === 0 ? 'var(--c-text-3)' : 'var(--c-text-1)',
+            cursor: pastStates.length === 0 ? 'not-allowed' : 'pointer',
+            padding: '4px'
+          }}
+        >
+          <Undo2 size={16} />
+        </button>
+        <button 
+          onClick={() => redo()}
+          disabled={futureStates.length === 0}
+          title="Rehacer"
+          style={{
+            background: 'transparent',
+            border: 'none',
+            color: futureStates.length === 0 ? 'var(--c-text-3)' : 'var(--c-text-1)',
+            cursor: futureStates.length === 0 ? 'not-allowed' : 'pointer',
+            padding: '4px'
+          }}
+        >
+          <Redo2 size={16} />
+        </button>
+        <div style={{ width: '1px', height: '24px', backgroundColor: 'var(--c-border)', margin: '0 8px' }}></div>
+        <button 
+          onClick={handlePlayToggle}
           style={{
             background: 'transparent',
             border: '1px solid var(--c-border-focus)',
@@ -43,7 +114,7 @@ const ControlBar = ({ project, isPlaying, onPlayToggle, onStop, activeTab, onTab
           {isPlaying ? <Pause size={14} /> : <Play size={14} />}
         </button>
         <button 
-          onClick={onStop}
+          onClick={handleStop}
           style={{
             background: 'transparent',
             border: '1px solid var(--c-border-focus)',
@@ -64,7 +135,7 @@ const ControlBar = ({ project, isPlaying, onPlayToggle, onStop, activeTab, onTab
         {['EDITOR', 'MIXER', 'DASHBOARD'].map(tab => (
           <button
             key={tab}
-            onClick={() => onTabChange(tab.toLowerCase())}
+            onClick={() => updateUIFocus({ activeTab: tab.toLowerCase() })}
             style={{
               background: 'transparent',
               border: 'none',

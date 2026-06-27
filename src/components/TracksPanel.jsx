@@ -1,9 +1,13 @@
-import React from 'react';
+import React, { useMemo } from 'react';
+import { useProjectStore } from '../store/useProjectStore';
+import { useUIStore } from '../store/useUIStore';
 
-const TRACKS = ['GUITAR', 'PIANO', 'BASS', 'STRINGS'];
-
-const TracksPanel = React.memo(({ masterJson, uiFocus, updateUIFocus }) => {
-  const sections = masterJson?.sectionsData || [];
+const TracksPanel = React.memo(() => {
+  const { sections: masterSections, instruments } = useProjectStore();
+  const { uiFocusContext, updateUIFocus } = useUIStore();
+  const sections = masterSections || [];
+  
+  const trackKeys = useMemo(() => Object.keys(instruments || {}).map(k => k.toUpperCase()), [instruments]);
   
   // Calcular los compases (beats) totales para distribuir los anchos
   let totalBeats = 0;
@@ -63,8 +67,8 @@ const TracksPanel = React.memo(({ masterJson, uiFocus, updateUIFocus }) => {
       </div>
 
       {/* FILAS DE PISTAS (Track Lanes) */}
-      {TRACKS.map(track => {
-        const isSelected = uiFocus?.selectedInstrument?.toLowerCase() === track.toLowerCase();
+      {trackKeys.map(track => {
+        const isSelected = uiFocusContext?.selectedInstrument?.toLowerCase() === track.toLowerCase();
         
         return (
           <div key={track} style={{
@@ -136,5 +140,7 @@ const TracksPanel = React.memo(({ masterJson, uiFocus, updateUIFocus }) => {
     </div>
   );
 });
+
+TracksPanel.displayName = 'TracksPanel';
 
 export default TracksPanel;

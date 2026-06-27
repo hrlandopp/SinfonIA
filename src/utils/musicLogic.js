@@ -3,6 +3,7 @@
  * Contiene funciones puras para manipular eventos MIDI crudos, evitando
  * matemáticas complejas en la IA y protegiendo el motor de audio.
  */
+import { Chord, Note, Interval } from '@tonaljs/tonal';
 
 // Helper: Convierte notación científica (ej. "C4") a valor MIDI
 const noteToMidi = (note) => {
@@ -67,8 +68,14 @@ export const applyGroove = (notesArray, groovePattern = 'syncopated') => {
     const beatPos = (note.timeOffset || 0) % 4; // Posición dentro de un compás de 4/4
 
     if (groovePattern === 'syncopated') {
-      const isDownbeat = beatPos % 1 === 0; // Tiempos fuertes: 0, 1, 2, 3
-      const isUpbeat = beatPos % 0.5 === 0 && !isDownbeat; // Contratiempos: 0.5, 1.5, 2.5, 3.5
+      const epsilon = 0.05;
+      const mod1 = beatPos % 1;
+      
+      // Tiempos fuertes: 0, 1, 2, 3 (tolerancia para valores como 0.03 o 0.98)
+      const isDownbeat = mod1 < epsilon || mod1 > 1 - epsilon;
+      
+      // Contratiempos: 0.5, 1.5, 2.5, 3.5 (tolerancia para valores como 0.52 o 0.48)
+      const isUpbeat = Math.abs(mod1 - 0.5) < epsilon;
 
       if (isDownbeat) newVelocity = 0.6; // Suaviza el golpe de click track
       else if (isUpbeat) newVelocity = 0.9; // Acentúa el contratiempo (groove)
@@ -112,49 +119,87 @@ export const reduceToDyad = (chordNotes) => {
   return [midiToNote(rootMidi), midiToNote(secondNoteMidi)];
 };
 
-/**
- * 4. evaluateHarmonicClash
- * Analizador de disonancias severas para generar el "Efecto Cascada"
- * (IA autoadaptando su melodía sobre los acordes vivos).
- * 
- * @param {Array<string>} newChordNotes - Array de pitches del acorde base
- * @param {string} activeMelodyNote - Pitch de la nota de la melodía flotante
- * @returns {Object} - { hasClash: boolean, suggestedNote: string }
- */
 export const evaluateHarmonicClash = (newChordNotes, activeMelodyNote) => {
-  const melodyMidi = noteToMidi(activeMelodyNote);
-  if (!melodyMidi) return { hasClash: false, suggestedNote: activeMelodyNote };
-
-  let hasClash = false;
-  let clashMidi = null;
-
-  for (const chordNote of newChordNotes) {
-    const chordMidi = noteToMidi(chordNote);
-    const interval = Math.abs(chordMidi - melodyMidi) % 12;
-
-    // Una segunda menor (1 semitono) o séptima mayor (11 semitonos) crea fricción acústica severa
-    if (interval === 1 || interval === 11) {
-      hasClash = true;
-      clashMidi = chordMidi;
-      break;
-    }
+  if (!activeMelodyNote || !newChordNotes || newChordNotes.length === 0) {
+    return { hasClash: false, suggestedNote: activeMelodyNote };
   }
 
-  if (hasClash) {
-    // Resolución simple: Mover la nota de la melodía para que coincida 
-    // exactamente con la nota del acorde que estaba chocando (unísono u octava)
-    const diff = (melodyMidi - clashMidi) % 12;
-    let newMelodyMidi = melodyMidi;
+  const melodyNote = Note.simplify(activeMelodyNote);
+  const melodyPc = Note.pitchClass(melodyNote);
+  const melodyMidi = Note.midi(melodyNote) || noteToMidi(activeMelodyNote);
+  
+  if (!melodyMidi) return { hasClash: false, suggestedNote: activeMelodyNote };
+
+  // A. Detectar contexto del acorde completo usando Tonal
+  const chordNotesSimp = newChordNotes.map(n => Note.simplify(n));
+  const chordDetect = Chord.detect(chordNotesSimp);
+  const detectedChord = chordDetect.length > 0 ? Chord.get(chordDetect[0]) : null;
+
+  if (detectedChord && !detectedChord.empty) {
+    const chordNotesPc = detectedChord.notes; 
     
-    if (diff === 1 || diff === -11) { 
-      // Melodía está 1 semitono por encima de la nota del acorde -> Bajar 1
-      newMelodyMidi -= 1; 
-    } else if (diff === 11 || diff === -1) { 
-      // Melodía está 1 semitono por debajo -> Subir 1
-      newMelodyMidi += 1; 
+    // Si la melodía ya es parte del acorde, está perfecta
+    if (chordNotesPc.includes(melodyPc)) {
+      return { hasClash: false, suggestedNote: activeMelodyNote };
     }
-    
-    return { hasClash: true, suggestedNote: midiToNote(newMelodyMidi) };
+
+    // Buscamos choques severos comparando la melodía con CADA nota del acorde
+    for (const cNote of chordNotesPc) {
+      const interval = Interval.distance(cNote, melodyPc);
+      const semitones = Math.abs(Interval.semitones(interval)) % 12;
+
+      // Choques: 1 (2da menor), 11 (7ma mayor), 6 (tritono)
+      if (semitones === 1 || semitones === 11 || semitones === 6) {
+        // Resolver a la nota del acorde más cercana armónicamente
+        let closestChordNote = chordNotesPc[0];
+        let minDiff = 12;
+        
+        for (const cn of chordNotesPc) {
+          const d = Math.abs(Interval.semitones(Interval.distance(melodyPc, cn))) % 12;
+          const actualDist = Math.min(d, 12 - d); // Distancia más corta (arriba o abajo)
+          if (actualDist < minDiff) {
+            minDiff = actualDist;
+            closestChordNote = cn;
+          }
+        }
+
+        const distSemitones = Interval.semitones(Interval.distance(melodyPc, closestChordNote));
+        const newMelodyNote = Note.transpose(melodyNote, Interval.fromSemitones(distSemitones));
+        
+        return { hasClash: true, suggestedNote: newMelodyNote };
+      }
+    }
+  } else {
+    // Fallback: Evaluación matemática si no hay acorde claro detectado
+    let hasClash = false;
+    let clashMidi = null;
+
+    for (const chordNote of newChordNotes) {
+      const chordMidi = Note.midi(chordNote) || noteToMidi(chordNote);
+      if (!chordMidi) continue;
+      
+      const interval = Math.abs(chordMidi - melodyMidi) % 12;
+      if (interval === 1 || interval === 11 || interval === 6) {
+        hasClash = true;
+        clashMidi = chordMidi;
+        break;
+      }
+    }
+
+    if (hasClash) {
+      const diff = (melodyMidi - clashMidi) % 12;
+      let newMelodyMidi = melodyMidi;
+      
+      if (diff === 1 || diff === -11) { 
+        newMelodyMidi -= 1; 
+      } else if (diff === 11 || diff === -1) { 
+        newMelodyMidi += 1; 
+      } else if (diff === 6 || diff === -6) {
+        newMelodyMidi += 1; // 6 -> 7 (Quinta Justa resuelve el tritono)
+      }
+      
+      return { hasClash: true, suggestedNote: Note.fromMidi(newMelodyMidi) || midiToNote(newMelodyMidi) };
+    }
   }
 
   return { hasClash: false, suggestedNote: activeMelodyNote };

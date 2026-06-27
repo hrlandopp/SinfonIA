@@ -1,10 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
+import { useProjects } from '../hooks/useProjects';
+import { useProjectStore } from '../store/useProjectStore';
 
-const ProjectLauncher = ({ projectsList, onInitializeProject, onOpenWorkspace }) => {
+const ProjectLauncher = () => {
+  const { projectsList } = useProjectStore();
+  const { selectProject, createProject } = useProjects();
   const [geminiKey, setGeminiKey] = useState(localStorage.getItem('gemini_api_key') || '');
-  const [openaiKey, setOpenaiKey] = useState(localStorage.getItem('openai_api_key') || '');
-  const [producerProv, setProducerProv] = useState(localStorage.getItem('producer_provider') || 'gemini');
-  const [mascotProv, setMascotProv] = useState(localStorage.getItem('mascot_provider') || 'openai');
 
   const handleGeminiChange = (e) => {
     const val = e.target.value;
@@ -12,22 +13,9 @@ const ProjectLauncher = ({ projectsList, onInitializeProject, onOpenWorkspace })
     localStorage.setItem('gemini_api_key', val);
   };
 
-  const handleOpenaiChange = (e) => {
-    const val = e.target.value;
-    setOpenaiKey(val);
-    localStorage.setItem('openai_api_key', val);
-  };
-
-  const handleProducerProvChange = (e) => {
-    const val = e.target.value;
-    setProducerProv(val);
-    localStorage.setItem('producer_provider', val);
-  };
-
-  const handleMascotProvChange = (e) => {
-    const val = e.target.value;
-    setMascotProv(val);
-    localStorage.setItem('mascot_provider', val);
+  const handleInitializeProject = () => {
+    const name = prompt('Nombre del proyecto:', 'Mi Canción'); 
+    if (name) createProject(name);
   };
 
   return (
@@ -56,7 +44,7 @@ const ProjectLauncher = ({ projectsList, onInitializeProject, onOpenWorkspace })
         {/* New Project */}
         <div>
           <button 
-            onClick={onInitializeProject}
+            onClick={handleInitializeProject}
             style={{
               width: '100%',
               padding: '16px',
@@ -103,7 +91,7 @@ const ProjectLauncher = ({ projectsList, onInitializeProject, onOpenWorkspace })
                   </div>
                 </div>
                 <button
-                  onClick={() => onOpenWorkspace(p)}
+                  onClick={() => selectProject(p)}
                   style={{
                     padding: '8px 16px',
                     backgroundColor: 'var(--c-surface)',
@@ -139,25 +127,6 @@ const ProjectLauncher = ({ projectsList, onInitializeProject, onOpenWorkspace })
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-            <label style={{ fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'var(--c-text-2)' }}>OPENAI_API_KEY</label>
-            <input 
-              type="password" 
-              value={openaiKey} 
-              onChange={handleOpenaiChange} 
-              placeholder="sk-..." 
-              style={{
-                backgroundColor: 'var(--c-input)',
-                border: '1px solid var(--c-border)',
-                color: 'var(--c-text-1)',
-                padding: '10px 12px',
-                fontFamily: 'var(--font-mono)',
-                fontSize: '12px',
-                outline: 'none'
-              }}
-            />
-          </div>
-
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
             <label style={{ fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'var(--c-text-2)' }}>GEMINI_API_KEY</label>
             <input 
               type="password" 
@@ -174,50 +143,6 @@ const ProjectLauncher = ({ projectsList, onInitializeProject, onOpenWorkspace })
                 outline: 'none'
               }}
             />
-          </div>
-
-          <div style={{ height: '1px', backgroundColor: 'var(--c-border)', margin: '8px 0' }} />
-
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-            <label style={{ fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'var(--c-text-2)' }}>PRODUCER_DEFAULT_PROVIDER</label>
-            <select 
-              value={producerProv} 
-              onChange={handleProducerProvChange}
-              style={{
-                backgroundColor: 'var(--c-input)',
-                border: '1px solid var(--c-border)',
-                color: 'var(--c-text-1)',
-                padding: '10px 12px',
-                fontFamily: 'var(--font-mono)',
-                fontSize: '12px',
-                outline: 'none',
-                appearance: 'none'
-              }}
-            >
-              <option value="gemini">GEMINI (RECOMMENDED)</option>
-              <option value="openai">OPENAI</option>
-            </select>
-          </div>
-
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-            <label style={{ fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'var(--c-text-2)' }}>MASCOT_DEFAULT_PROVIDER</label>
-            <select 
-              value={mascotProv} 
-              onChange={handleMascotProvChange}
-              style={{
-                backgroundColor: 'var(--c-input)',
-                border: '1px solid var(--c-border)',
-                color: 'var(--c-text-1)',
-                padding: '10px 12px',
-                fontFamily: 'var(--font-mono)',
-                fontSize: '12px',
-                outline: 'none',
-                appearance: 'none'
-              }}
-            >
-              <option value="openai">OPENAI (RECOMMENDED)</option>
-              <option value="gemini">GEMINI</option>
-            </select>
           </div>
         </div>
       </div>

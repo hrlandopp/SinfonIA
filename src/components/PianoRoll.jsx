@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useRef } from 'react'
 
 const PITCHES = ['C5', 'B4', 'A#4', 'A4', 'G#4', 'G4', 'F#4', 'F4', 'E4', 'D#4', 'D4', 'C#4', 'C4']
 
@@ -12,6 +12,25 @@ export default function PianoRoll({
   isPlaying = false,
   onPlayNote
 }) {
+  const keyboardScrollRef = useRef(null)
+  const gridScrollRef = useRef(null)
+
+  const handleKeyboardScroll = () => {
+    if (keyboardScrollRef.current && gridScrollRef.current) {
+      if (gridScrollRef.current.scrollTop !== keyboardScrollRef.current.scrollTop) {
+        gridScrollRef.current.scrollTop = keyboardScrollRef.current.scrollTop
+      }
+    }
+  }
+
+  const handleGridScroll = () => {
+    if (keyboardScrollRef.current && gridScrollRef.current) {
+      if (keyboardScrollRef.current.scrollTop !== gridScrollRef.current.scrollTop) {
+        keyboardScrollRef.current.scrollTop = gridScrollRef.current.scrollTop
+      }
+    }
+  }
+
   const handleCellClick = (pitch, beat) => {
     // Play sound immediately for feedback
     if (onPlayNote) onPlayNote(pitch)
@@ -50,7 +69,12 @@ export default function PianoRoll({
         zIndex: 2
       }}>
         <div style={{ height: '24px', borderBottom: '1px solid var(--c-border)', background: 'var(--c-elevated)' }} />
-        <div style={{ flex: 1, overflowY: 'auto' }} className="piano-scroll-sync">
+        <div 
+          ref={keyboardScrollRef}
+          onScroll={handleKeyboardScroll}
+          style={{ flex: 1, overflowY: 'auto' }} 
+          className="piano-scroll-sync"
+        >
           {PITCHES.map((pitch, i) => (
             <div
               key={pitch}
@@ -104,7 +128,12 @@ export default function PianoRoll({
         </div>
 
         {/* Celdas */}
-        <div style={{ flex: 1, overflowY: 'auto' }} className="piano-scroll-sync">
+        <div 
+          ref={gridScrollRef}
+          onScroll={handleGridScroll}
+          style={{ flex: 1, overflowY: 'auto' }} 
+          className="piano-scroll-sync"
+        >
           <div style={{ position: 'relative' }}>
             {PITCHES.map((pitch) => (
               <div key={`row-${pitch}`} style={{ display: 'flex', height: '24px' }}>

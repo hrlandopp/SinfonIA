@@ -1,8 +1,12 @@
 import React from 'react';
 import TracksPanel from './TracksPanel';
 import VisualEditors from './VisualEditors';
+import { useUIStore } from '../store/useUIStore';
 
-const WorkspaceContainer = ({ activeTab, masterJson, uiFocus, updateUIFocus, playFretNote }) => {
+const WorkspaceContainer = ({ playFretNote }) => {
+  const { uiFocusContext } = useUIStore();
+  const activeTab = uiFocusContext?.activeTab || 'editor';
+
   const getDisplayText = () => {
     switch (activeTab) {
       case 'editor':
@@ -27,17 +31,10 @@ const WorkspaceContainer = ({ activeTab, masterJson, uiFocus, updateUIFocus, pla
       {activeTab === 'editor' ? (
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
           <div style={{ flex: '0 0 50%', display: 'flex', flexDirection: 'column', borderBottom: '1px solid #2a2a30' }}>
-            <TracksPanel 
-              masterJson={masterJson} 
-              uiFocus={uiFocus} 
-              updateUIFocus={updateUIFocus} 
-            />
+            <TracksPanel />
           </div>
           <div style={{ flex: '0 0 50%', display: 'flex', flexDirection: 'column' }}>
-            <VisualEditors 
-              uiFocus={uiFocus} 
-              playFretNote={playFretNote} 
-            />
+            <VisualEditors playFretNote={playFretNote} />
           </div>
         </div>
       ) : (
