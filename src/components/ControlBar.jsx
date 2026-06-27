@@ -10,7 +10,7 @@ const ControlBar = () => {
   const { undo, redo, pastStates, futureStates } = useProjectStore.temporal(state => state);
   
   const { uiFocusContext, updateUIFocus } = useUIStore();
-  const { isPlaying, setIsPlaying, playNote } = usePlaybackControls();
+  const { isPlaying, setIsPlaying } = usePlaybackControls();
   const activeTab = uiFocusContext?.activeTab || 'editor';
 
   const handlePlayToggle = () => setIsPlaying(!isPlaying);
@@ -28,124 +28,96 @@ const ControlBar = () => {
   };
 
   return (
-    <div style={{
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      height: '60px',
-      padding: '0 24px',
-      backgroundColor: 'var(--c-base)',
-      borderBottom: '1px solid var(--c-border)',
-      color: 'var(--c-text-1)',
-      fontFamily: 'var(--font-ui)'
-    }}>
+    <div className="h-[60px] flex items-center justify-between px-6 bg-zinc-950 border-b border-zinc-800/80 text-zinc-100 flex-shrink-0 z-30 shadow-sm shadow-black/20">
+      
       {/* Metadata Section */}
-      <div style={{ display: 'flex', gap: '24px', alignItems: 'center' }}>
-        <div style={{ fontSize: '14px', fontWeight: '600', fontFamily: 'var(--font-head)' }}>
+      <div className="flex items-center gap-6">
+        <div className="text-sm font-bold tracking-tight">
           {project?.name || 'SinfonIA Pro'}
         </div>
-        <div style={{ display: 'flex', gap: '16px', fontFamily: 'var(--font-mono)', fontSize: '12px', color: 'var(--c-text-2)', alignItems: 'center' }}>
-          <div>BPM: <span style={{ color: 'var(--c-text-1)' }}>{project?.tempo_bpm || 120}</span></div>
-          <div>KEY: <span style={{ color: 'var(--c-text-1)' }}>{project?.key_signature || 'C'}</span></div>
+        
+        {/* Barra Paramétrica */}
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 bg-zinc-900 border border-zinc-800/80 rounded-md px-3 py-1.5 shadow-inner shadow-black/40">
+            <span className="text-[10px] font-mono text-zinc-500 uppercase tracking-wider">BPM</span>
+            <span className="text-xs font-mono font-medium text-zinc-200">{project?.tempo_bpm || 120}</span>
+          </div>
+          <div className="flex items-center gap-2 bg-zinc-900 border border-zinc-800/80 rounded-md px-3 py-1.5 shadow-inner shadow-black/40">
+            <span className="text-[10px] font-mono text-zinc-500 uppercase tracking-wider">KEY</span>
+            <span className="text-xs font-mono font-medium text-zinc-200">{project?.key_signature || 'C'}</span>
+          </div>
+          
           <button 
             onClick={handleExportMidi}
             title="Exportar a MIDI"
-            style={{
-              background: 'transparent',
-              border: '1px solid var(--c-border-focus)',
-              color: 'var(--c-text-1)',
-              padding: '4px 8px',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              borderRadius: '4px'
-            }}
+            className="flex items-center gap-2 bg-zinc-900 hover:bg-zinc-800 border border-zinc-800/80 hover:border-zinc-700 rounded-md px-3 py-1.5 transition-all active:scale-95"
           >
-            <Download size={12} /> <span style={{ fontSize: '10px', textTransform: 'uppercase' }}>MIDI</span>
+            <Download size={14} className="text-zinc-400" />
+            <span className="text-[10px] font-mono font-medium text-zinc-300 uppercase tracking-wider">MIDI</span>
           </button>
         </div>
       </div>
 
       {/* Transport Controls & History */}
-      <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-        <button 
-          onClick={() => undo()}
-          disabled={pastStates.length === 0}
-          title="Deshacer"
-          style={{
-            background: 'transparent',
-            border: 'none',
-            color: pastStates.length === 0 ? 'var(--c-text-3)' : 'var(--c-text-1)',
-            cursor: pastStates.length === 0 ? 'not-allowed' : 'pointer',
-            padding: '4px'
-          }}
-        >
-          <Undo2 size={16} />
-        </button>
-        <button 
-          onClick={() => redo()}
-          disabled={futureStates.length === 0}
-          title="Rehacer"
-          style={{
-            background: 'transparent',
-            border: 'none',
-            color: futureStates.length === 0 ? 'var(--c-text-3)' : 'var(--c-text-1)',
-            cursor: futureStates.length === 0 ? 'not-allowed' : 'pointer',
-            padding: '4px'
-          }}
-        >
-          <Redo2 size={16} />
-        </button>
-        <div style={{ width: '1px', height: '24px', backgroundColor: 'var(--c-border)', margin: '0 8px' }}></div>
-        <button 
-          onClick={handlePlayToggle}
-          style={{
-            background: 'transparent',
-            border: '1px solid var(--c-border-focus)',
-            color: isPlaying ? 'var(--c-ok)' : 'var(--c-text-1)',
-            padding: '6px 12px',
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center'
-          }}
-        >
-          {isPlaying ? <Pause size={14} /> : <Play size={14} />}
-        </button>
-        <button 
-          onClick={handleStop}
-          style={{
-            background: 'transparent',
-            border: '1px solid var(--c-border-focus)',
-            color: 'var(--c-text-1)',
-            padding: '6px 12px',
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center'
-          }}
-        >
-          <Square size={14} />
-        </button>
+      <div className="flex items-center gap-2">
+        <div className="flex bg-zinc-900/80 border border-zinc-800/80 rounded-md p-0.5">
+          <button 
+            onClick={() => undo()}
+            disabled={pastStates.length === 0}
+            title="Deshacer"
+            className={`p-1.5 rounded transition-colors ${pastStates.length === 0 ? 'text-zinc-700 cursor-not-allowed' : 'text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800 active:scale-95'}`}
+          >
+            <Undo2 size={16} />
+          </button>
+          <button 
+            onClick={() => redo()}
+            disabled={futureStates.length === 0}
+            title="Rehacer"
+            className={`p-1.5 rounded transition-colors ${futureStates.length === 0 ? 'text-zinc-700 cursor-not-allowed' : 'text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800 active:scale-95'}`}
+          >
+            <Redo2 size={16} />
+          </button>
+        </div>
+
+        <div className="w-px h-6 bg-zinc-800 mx-2" />
+
+        <div className="flex items-center gap-1">
+          <button 
+            onClick={handlePlayToggle}
+            className={`flex items-center justify-center w-10 h-8 rounded-md transition-all active:scale-95 border ${isPlaying ? 'bg-emerald-500/10 border-emerald-500/50 text-emerald-400 shadow-[0_0_15px_rgba(16,185,129,0.2)]' : 'bg-zinc-900 border-zinc-800/80 text-zinc-300 hover:bg-zinc-800 hover:text-white'}`}
+            title="Reproducir/Pausar"
+          >
+            {isPlaying ? <Pause size={16} className="fill-current" /> : <Play size={16} className="fill-current" />}
+          </button>
+          <button 
+            onClick={handleStop}
+            className="flex items-center justify-center w-10 h-8 rounded-md transition-all active:scale-95 bg-zinc-900 border border-zinc-800/80 text-zinc-400 hover:bg-zinc-800 hover:text-white"
+            title="Detener"
+          >
+            <Square size={14} className="fill-current" />
+          </button>
+          <button 
+            onClick={() => {
+               // This requires connecting to Tone.Transport.loop in the future, simulating for now
+               const el = document.getElementById('loop-btn-icon');
+               if(el) el.classList.toggle('text-indigo-400');
+            }}
+            id="loop-btn-icon"
+            className="flex items-center justify-center w-10 h-8 rounded-md transition-all active:scale-95 bg-zinc-900 border border-zinc-800/80 text-zinc-500 hover:bg-zinc-800 hover:text-zinc-300"
+            title="Repetir (Bucle)"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m17 2 4 4-4 4"/><path d="M3 11v-1a4 4 0 0 1 4-4h14"/><path d="m7 22-4-4 4-4"/><path d="M21 13v1a4 4 0 0 1-4 4H3"/></svg>
+          </button>
+        </div>
       </div>
 
       {/* View Tabs */}
-      <div style={{ display: 'flex', gap: '16px' }}>
+      <div className="flex bg-zinc-900/50 p-1 rounded-lg border border-zinc-800/50">
         {['EDITOR', 'MIXER', 'DASHBOARD'].map(tab => (
           <button
             key={tab}
             onClick={() => updateUIFocus({ activeTab: tab.toLowerCase() })}
-            style={{
-              background: 'transparent',
-              border: 'none',
-              color: activeTab === tab.toLowerCase() ? 'var(--c-text-1)' : 'var(--c-text-3)',
-              fontSize: '11px',
-              fontWeight: '600',
-              letterSpacing: '0.05em',
-              cursor: 'pointer',
-              textTransform: 'uppercase'
-            }}
+            className={`px-4 py-1.5 rounded-md text-[10px] font-bold tracking-widest transition-all ${activeTab === tab.toLowerCase() ? 'bg-zinc-800 text-zinc-100 shadow-sm' : 'text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/50'}`}
           >
             {tab}
           </button>

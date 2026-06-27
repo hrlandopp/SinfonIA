@@ -19,23 +19,8 @@ const AIManagerPanel = React.memo(() => {
   }, [mascotHistory]);
 
   return (
-    <aside style={{
-      width: '280px',
-      backgroundColor: 'var(--c-base)',
-      borderRight: '1px solid var(--c-border)',
-      display: 'flex',
-      flexDirection: 'column',
-      overflow: 'hidden'
-    }}>
-      <div style={{
-        padding: '16px',
-        fontSize: '11px',
-        fontWeight: '600',
-        color: 'var(--c-text-2)',
-        textTransform: 'uppercase',
-        letterSpacing: '0.05em',
-        borderBottom: '1px solid var(--c-border)'
-      }}>
+    <aside className="w-1/4 max-w-sm bg-zinc-950 border-r border-zinc-800 flex flex-col overflow-hidden flex-shrink-0 z-20 shadow-xl shadow-black/50">
+      <div className="p-4 text-[10px] font-bold text-zinc-500 uppercase tracking-widest border-b border-zinc-800/50 bg-zinc-900/50">
         AI_MANAGEMENT_CONSOLE
       </div>
 

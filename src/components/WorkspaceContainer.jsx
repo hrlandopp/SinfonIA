@@ -1,6 +1,7 @@
 import React from 'react';
 import TracksPanel from './TracksPanel';
 import VisualEditors from './VisualEditors';
+import ChordProgressionLane from './ChordProgressionLane';
 import { useUIStore } from '../store/useUIStore';
 
 const WorkspaceContainer = ({ playFretNote }) => {
@@ -21,33 +22,24 @@ const WorkspaceContainer = ({ playFretNote }) => {
   };
 
   return (
-    <main style={{
-      flex: 1,
-      backgroundColor: 'var(--c-bg)',
-      display: 'flex',
-      flexDirection: 'column',
-      overflow: 'hidden'
-    }}>
+    <main className="flex-1 bg-zinc-950 flex flex-col overflow-hidden relative">
       {activeTab === 'editor' ? (
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-          <div style={{ flex: '0 0 50%', display: 'flex', flexDirection: 'column', borderBottom: '1px solid #2a2a30' }}>
-            <TracksPanel />
-          </div>
-          <div style={{ flex: '0 0 50%', display: 'flex', flexDirection: 'column' }}>
+        <div className="flex-1 flex flex-col overflow-hidden relative">
+          
+          {/* Top: Chord Progression Lane */}
+          <ChordProgressionLane />
+          
+          {/* Middle: Minimized Tracks Panel */}
+          <TracksPanel />
+          
+          {/* Bottom: Dynamic Visual Editors */}
+          <div className="flex-1 flex flex-col overflow-hidden relative bg-zinc-900 border-t border-zinc-800/80">
             <VisualEditors playFretNote={playFretNote} />
           </div>
+          
         </div>
       ) : (
-        <div style={{
-          flex: 1,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          fontFamily: 'var(--font-mono)',
-          fontSize: '14px',
-          color: 'var(--c-text-3)',
-          letterSpacing: '0.1em'
-        }}>
+        <div className="flex-1 flex items-center justify-center font-mono text-sm text-zinc-500 tracking-widest uppercase">
           [{getDisplayText()}]
         </div>
       )}

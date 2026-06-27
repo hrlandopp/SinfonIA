@@ -18,47 +18,18 @@ const TracksPanel = React.memo(() => {
   });
 
   return (
-    <div style={{
-      width: '100%',
-      backgroundColor: 'var(--c-bg)',
-      display: 'flex',
-      flexDirection: 'column',
-      borderBottom: '1px solid var(--c-border)'
-    }}>
+    <div className="w-full bg-zinc-950 flex flex-col border-b border-zinc-800 flex-shrink-0 max-h-48 overflow-y-auto scrollbar-thin scrollbar-thumb-zinc-800">
       {/* CABECERA SUPERIOR (Timeline Ruler) */}
-      <div style={{
-        display: 'flex',
-        height: '32px',
-        backgroundColor: '#222226',
-        borderBottom: '1px solid var(--c-border)'
-      }}>
-        <div style={{
-          width: '200px',
-          borderRight: '1px solid var(--c-border)',
-          display: 'flex',
-          alignItems: 'center',
-          padding: '0 12px',
-          fontSize: '10px',
-          fontFamily: 'var(--font-mono)',
-          color: 'var(--c-text-3)'
-        }}>
+      <div className="flex h-6 bg-zinc-900 border-b border-zinc-800/80 sticky top-0 z-10">
+        <div className="w-[150px] border-r border-zinc-800/80 flex items-center px-3 text-[9px] font-mono font-bold text-zinc-500 tracking-widest uppercase">
           TRACK_NAME
         </div>
         
-        <div style={{ flex: 1, display: 'flex', position: 'relative' }}>
+        <div className="flex-1 flex relative">
           {sectionsWithBeats.map((sec, idx) => {
             const flexBasis = totalBeats > 0 ? `${(sec.secBeats / totalBeats) * 100}%` : 'auto';
             return (
-              <div key={sec.id || idx} style={{
-                flexBasis,
-                borderRight: '1px solid #2a2a30',
-                display: 'flex',
-                alignItems: 'center',
-                padding: '0 8px',
-                fontSize: '10px',
-                fontFamily: 'var(--font-mono)',
-                color: 'var(--c-text-2)'
-              }}>
+              <div key={sec.id || idx} style={{ flexBasis }} className="border-r border-zinc-800/50 flex items-center px-2 text-[9px] font-mono text-zinc-600">
                 {sec.name ? sec.name.toUpperCase() : `SECTION_${idx + 1}`} ({sec.secBeats}B)
               </div>
             );
@@ -71,65 +42,27 @@ const TracksPanel = React.memo(() => {
         const isSelected = uiFocusContext?.selectedInstrument?.toLowerCase() === track.toLowerCase();
         
         return (
-          <div key={track} style={{
-            display: 'flex',
-            height: '64px',
-            borderBottom: '1px solid var(--c-border)',
-            backgroundColor: isSelected ? 'var(--c-base)' : '#1a1a1e'
-          }}>
+          <div key={track} className={`flex h-8 border-b border-zinc-800/50 transition-colors ${isSelected ? 'bg-zinc-900/50' : 'bg-zinc-950'}`}>
             {/* Bloque Izquierdo (Track Header) */}
             <div 
               onClick={() => updateUIFocus({ selectedInstrument: track.toLowerCase() })}
-              style={{
-                width: '200px',
-                borderRight: '1px solid var(--c-border)',
-                display: 'flex',
-                alignItems: 'center',
-                padding: '0 12px',
-                cursor: 'pointer',
-                position: 'relative',
-                backgroundColor: isSelected ? 'var(--c-elevated)' : 'transparent'
-              }}
+              className={`w-[150px] border-r border-zinc-800/80 flex items-center px-3 cursor-pointer relative transition-colors ${isSelected ? 'bg-zinc-800/50' : 'hover:bg-zinc-900'}`}
             >
               {isSelected && (
-                <div style={{
-                  position: 'absolute',
-                  left: 0,
-                  top: 0,
-                  bottom: 0,
-                  width: '3px',
-                  backgroundColor: 'var(--c-accent)'
-                }} />
+                <div className="absolute left-0 top-0 bottom-0 w-0.5 bg-indigo-500" />
               )}
-              <span style={{
-                fontFamily: 'var(--font-mono)',
-                fontSize: '11px',
-                color: isSelected ? 'var(--c-text-1)' : 'var(--c-text-2)',
-                letterSpacing: '0.05em'
-              }}>
+              <span className={`font-mono text-[10px] tracking-widest uppercase ${isSelected ? 'text-zinc-200 font-bold' : 'text-zinc-500 font-medium'}`}>
                 {track}
               </span>
             </div>
             
             {/* Bloque Derecho (Grid Timeline) */}
-            <div style={{ flex: 1, display: 'flex', position: 'relative' }}>
+            <div className="flex-1 flex relative">
               {sectionsWithBeats.map((sec, idx) => {
                 const flexBasis = totalBeats > 0 ? `${(sec.secBeats / totalBeats) * 100}%` : 'auto';
                 return (
-                  <div key={`${track}-${sec.id || idx}`} style={{
-                    flexBasis,
-                    borderRight: '1px solid #2a2a30',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    padding: '8px'
-                  }}>
-                    <div style={{
-                      width: '100%',
-                      height: '100%',
-                      backgroundColor: 'rgba(255,255,255,0.02)',
-                      border: '1px solid #2a2a30'
-                    }} />
+                  <div key={`${track}-${sec.id || idx}`} style={{ flexBasis }} className="border-r border-zinc-800/30 flex items-center justify-center p-1">
+                    <div className="w-full h-full bg-white/5 border border-white/5 rounded-sm" />
                   </div>
                 );
               })}

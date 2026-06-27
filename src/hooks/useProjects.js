@@ -141,7 +141,7 @@ export function useProjects() {
       setActiveSectionId(finalSecs[0]?.id || '');
       if (!ls) localforage.setItem(`local_secs_${sel.id}`, finalSecs);
     }
-    setCurrentLayout('studio');
+    setCurrentLayout('workspace');
   };
 
   const createProject = async (name) => {
