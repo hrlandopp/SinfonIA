@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
-import { useProjectStore } from '../store/useProjectStore';
-import { useUIStore } from '../store/useUIStore';
+import { useProjectStore } from '../../store/useProjectStore';
+import { useUIStore } from '../../store/useUIStore';
 
 const TracksPanel = React.memo(() => {
   const { sections: masterSections, instruments } = useProjectStore();

@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react';
 import localforage from 'localforage';
-import { supabase } from '../utils/supabaseClient';
+import { supabase } from '../services/supabaseClient';
 import { useProjectStore } from '../store/useProjectStore';
 import { useUIStore } from '../store/useUIStore';
-import { isGeminiConfigured, sendMessageToProducerAI, sendMessageToEducatorAI } from '../utils/geminiClient';
+import { isGeminiConfigured, sendMessageToProducerAI, sendMessageToEducatorAI } from '../services/geminiClient';
 
 export function useAIAgents() {
   const [producerHistory, setProducerHistory] = useState([]);

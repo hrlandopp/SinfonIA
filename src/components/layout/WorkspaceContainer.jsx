@@ -1,8 +1,8 @@
 import React from 'react';
-import TracksPanel from './TracksPanel';
-import VisualEditors from './VisualEditors';
-import ChordProgressionLane from './ChordProgressionLane';
-import { useUIStore } from '../store/useUIStore';
+import TracksPanel from '../panels/TracksPanel';
+import VisualEditors from '../editors/VisualEditors';
+import ChordProgressionLane from '../editors/ChordProgressionLane';
+import { useUIStore } from '../../store/useUIStore';
 
 const WorkspaceContainer = ({ playFretNote }) => {
   const { uiFocusContext } = useUIStore();

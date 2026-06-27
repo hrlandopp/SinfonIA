@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { temporal } from 'zundo';
-import { compileMasterJson } from '../utils/musicCompiler';
+import { compileMasterJson } from '../core/musicCompiler';
 
 export const useProjectStore = create(
   temporal(
@@ -20,7 +20,23 @@ export const useProjectStore = create(
         drums:  { active: true, volume: -12, type: 'basic', editorType: 'pianoroll' }, // TODO: drumrack
         strings: { active: false, volume: -20, type: 'pad', editorType: 'pianoroll' },
         violin: { active: false, volume: -18, type: 'melody', editorType: 'pianoroll' },
-        vibraphone: { active: false, volume: -16, type: 'chords', editorType: 'pianoroll' }
+        vibraphone: { active: false, volume: -16, type: 'chords', editorType: 'pianoroll' },
+        
+        // Nuevos Instrumentos (14)
+        bassoon: { active: false, volume: -16, type: 'melody', editorType: 'pianoroll' },
+        clarinet: { active: false, volume: -16, type: 'melody', editorType: 'pianoroll' },
+        contrabass: { active: false, volume: -18, type: 'roots', editorType: 'pianoroll' },
+        flute: { active: false, volume: -16, type: 'melody', editorType: 'pianoroll' },
+        frenchHorn: { active: false, volume: -16, type: 'pad', editorType: 'pianoroll' },
+        guitarElectric: { active: false, volume: -14, type: 'strum', editorType: 'fretboard' },
+        guitarNylon: { active: false, volume: -14, type: 'arpeggio', editorType: 'fretboard' },
+        harmonium: { active: false, volume: -18, type: 'pad', editorType: 'pianoroll' },
+        harp: { active: false, volume: -16, type: 'arpeggio', editorType: 'pianoroll' },
+        organ: { active: false, volume: -18, type: 'pad', editorType: 'pianoroll' },
+        saxophone: { active: false, volume: -14, type: 'melody', editorType: 'pianoroll' },
+        trombone: { active: false, volume: -14, type: 'melody', editorType: 'pianoroll' },
+        trumpet: { active: false, volume: -14, type: 'melody', editorType: 'pianoroll' },
+        tuba: { active: false, volume: -16, type: 'roots', editorType: 'pianoroll' }
       },
 
       masterJson: {

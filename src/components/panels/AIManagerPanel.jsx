@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useAIAgents } from '../hooks/useAIAgents';
-import { useUIStore } from '../store/useUIStore';
+import { useAIAgents } from '../../hooks/useAIAgents';
+import { useUIStore } from '../../store/useUIStore';
 import { Send, Terminal, AlertTriangle, Cpu, CheckCircle2 } from 'lucide-react';
 
 const AIManagerPanel = React.memo(() => {

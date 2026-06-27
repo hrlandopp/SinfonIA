@@ -1,10 +1,10 @@
 import React from 'react';
 import { Play, Pause, Square, Download, Undo2, Redo2 } from 'lucide-react';
 import { useStore } from 'zustand';
-import { useProjectStore } from '../store/useProjectStore';
-import { useUIStore } from '../store/useUIStore';
-import { usePlaybackControls } from '../context/PlaybackContext';
-import { exportProjectToMIDI } from '../utils/exportUtils';
+import { useProjectStore } from '../../store/useProjectStore';
+import { useUIStore } from '../../store/useUIStore';
+import { usePlaybackControls } from '../../context/PlaybackContext';
+import { exportProjectToMIDI } from '../../utils/exportUtils';
 
 const ControlBar = () => {
   const { project, masterJson } = useProjectStore();

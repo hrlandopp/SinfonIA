@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { useProjects } from '../hooks/useProjects';
-import { useProjectStore } from '../store/useProjectStore';
+import { useProjects } from '../../hooks/useProjects';
+import { useProjectStore } from '../../store/useProjectStore';
 import { Settings, FolderKanban, Plus, Play, Database, Sparkles, CheckCircle2, XCircle, Loader2 } from 'lucide-react';
-import { saveSupabaseCredentials } from '../utils/supabaseClient';
-import { saveGeminiKey, saveGeminiModel, getSelectedGeminiModel, AVAILABLE_MODELS, getAiClient, generateSongArt } from '../utils/geminiClient';
+import { saveSupabaseCredentials } from '../../services/supabaseClient';
+import { saveGeminiKey, saveGeminiModel, getSelectedGeminiModel, AVAILABLE_MODELS, getAiClient, generateSongArt } from '../../services/geminiClient';
 
 const ProjectCard = ({ project, onSelect }) => {
   const [coverUrl, setCoverUrl] = useState('');

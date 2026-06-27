@@ -2,9 +2,9 @@ import React, { useMemo } from 'react';
 import Fretboard from './Fretboard';
 import PianoRoll from './PianoRoll';
 import GuitarChordDiagram from './GuitarChordDiagram';
-import { useProjectStore } from '../store/useProjectStore';
-import { useUIStore } from '../store/useUIStore';
-import { usePlaybackControls } from '../context/PlaybackContext';
+import { useProjectStore } from '../../store/useProjectStore';
+import { useUIStore } from '../../store/useUIStore';
+import { usePlaybackControls } from '../../context/PlaybackContext';
 
 const VisualEditors = React.memo(({ playFretNote }) => {
   const { project, sections, activeSectionId, instruments, setSections } = useProjectStore();

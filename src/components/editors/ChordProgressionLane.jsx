@@ -1,6 +1,6 @@
 import React from 'react';
-import { useProjectStore } from '../store/useProjectStore';
-import { usePlaybackControls } from '../context/PlaybackContext';
+import { useProjectStore } from '../../store/useProjectStore';
+import { usePlaybackControls } from '../../context/PlaybackContext';
 import { Plus, X } from 'lucide-react';
 
 const ChordProgressionLane = () => {

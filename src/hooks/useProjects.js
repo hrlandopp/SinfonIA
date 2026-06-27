@@ -1,7 +1,7 @@
 import { useEffect, useCallback, useMemo } from 'react';
 import debounce from 'lodash.debounce';
 import localforage from 'localforage';
-import { supabase, isSupabaseConfigured } from '../utils/supabaseClient';
+import { supabase, isSupabaseConfigured } from '../services/supabaseClient';
 import { useProjectStore } from '../store/useProjectStore';
 import { useUIStore } from '../store/useUIStore';
 

@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useRef, useEffect, useMemo } from 'react';
-import * as Tone from 'tone';
+import { useAudioEngine } from '../core/useAudioEngine';
 
 const BeatContext = createContext(0);
 const PlaybackContext = createContext(null);
