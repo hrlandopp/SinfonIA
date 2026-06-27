@@ -31,8 +31,8 @@ export const saveGeminiModel = (modelId) => {
   }
 };
 
-const getAiClient = () => {
-  const apiKey = getGeminiKey()
+export const getAiClient = (testKey = null) => {
+  const apiKey = testKey || getGeminiKey()
   if (!apiKey) throw new Error('Clave API de Gemini no configurada.')
   return new GoogleGenAI({ apiKey })
 }
