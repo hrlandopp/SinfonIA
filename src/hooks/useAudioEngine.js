@@ -134,12 +134,22 @@ export const useAudioEngine = (masterJson, onBeatTick, isFullSongMode = true) =>
 
       console.log("🎧 Motor de audio inicializado. Esperando descarga de samples...");
       
-      // Wait for all samples to be loaded in Tone.js buffers
-      await Tone.loaded();
-      
-      if (isMounted) {
-        setIsAudioLoaded(true);
-        console.log("✅ Samples cargados. El motor está listo.");
+      try {
+        // Wait for all samples to be loaded in Tone.js buffers (con timeout de 4s para evitar bloqueo de UI)
+        await Promise.race([
+          Tone.loaded(),
+          new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout cargando audios")), 4000))
+        ]);
+        
+        if (isMounted) {
+          setIsAudioLoaded(true);
+          console.log("✅ Samples cargados. El motor está listo.");
+        }
+      } catch (error) {
+        console.warn("⚠️ Advertencia: Algunos samples de audio fallaron al cargar o no existen en /public. El motor se iniciará en modo degradado para no bloquear la UI.", error);
+        if (isMounted) {
+          setIsAudioLoaded(true);
+        }
       }
     };
 
