@@ -19,25 +19,10 @@ const ProjectLauncher = () => {
   };
 
   return (
-    <div style={{
-      display: 'flex',
-      width: '100vw',
-      height: '100vh',
-      backgroundColor: 'var(--c-bg)',
-      color: 'var(--c-text-1)',
-      fontFamily: 'var(--font-ui)',
-      overflow: 'hidden'
-    }}>
+    <div className="flex w-screen h-screen bg-zinc-950 text-zinc-100 font-sans overflow-hidden">
       {/* Left Column: CORE_PROJECTS_ENGINE */}
-      <div style={{
-        flex: 1,
-        borderRight: '1px solid var(--c-border)',
-        display: 'flex',
-        flexDirection: 'column',
-        padding: '32px',
-        gap: '24px'
-      }}>
-        <div style={{ fontFamily: 'var(--font-mono)', fontSize: '12px', color: 'var(--c-text-2)', letterSpacing: '0.05em' }}>
+      <div className="flex-1 border-r border-zinc-800/80 flex flex-col p-8 gap-6">
+        <div className="font-mono text-xs text-zinc-400 tracking-wider">
           [CORE_PROJECTS_ENGINE]
         </div>
 
@@ -45,64 +30,34 @@ const ProjectLauncher = () => {
         <div>
           <button 
             onClick={handleInitializeProject}
-            style={{
-              width: '100%',
-              padding: '16px',
-              backgroundColor: 'var(--c-surface)',
-              border: '1px solid var(--c-border)',
-              color: 'var(--c-text-1)',
-              fontFamily: 'var(--font-mono)',
-              fontSize: '13px',
-              cursor: 'pointer',
-              textAlign: 'center',
-              letterSpacing: '0.05em'
-            }}
-            onMouseEnter={e => e.currentTarget.style.backgroundColor = 'var(--c-elevated)'}
-            onMouseLeave={e => e.currentTarget.style.backgroundColor = 'var(--c-surface)'}
+            className="w-full p-4 bg-zinc-900 border border-zinc-800 text-zinc-200 font-mono text-sm tracking-tight transition-all duration-200 hover:bg-zinc-800 active:scale-[0.98]"
           >
             INITIALIZE_EMPTY_PROJECT
           </button>
         </div>
 
         {/* Recent Projects */}
-        <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '12px' }}>
-          <div style={{ fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'var(--c-text-3)', marginBottom: '4px' }}>
+        <div className="flex-1 overflow-y-auto flex flex-col gap-3">
+          <div className="font-mono text-[11px] text-zinc-500 mb-1">
             RECENT_PROJECTS
           </div>
           {projectsList.length === 0 ? (
-            <div style={{ padding: '24px', textAlign: 'center', color: 'var(--c-text-3)', border: '1px dashed var(--c-border)' }}>
+            <div className="p-6 text-center text-zinc-500 border border-dashed border-zinc-800">
               NO_PROJECTS_FOUND
             </div>
           ) : (
             projectsList.map(p => (
-              <div key={p.id} style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                padding: '12px 16px',
-                backgroundColor: 'var(--c-base)',
-                border: '1px solid var(--c-border)'
-              }}>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                  <div style={{ fontSize: '14px', fontWeight: '600' }}>{p.name}</div>
-                  <div style={{ fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'var(--c-text-2)', display: 'flex', gap: '12px' }}>
+              <div key={p.id} className="flex items-center justify-between p-4 bg-zinc-900 border border-zinc-800/50 rounded-lg transition-all duration-200 hover:border-zinc-700/50 hover:bg-zinc-800/30">
+                <div className="flex flex-col gap-1">
+                  <div className="text-sm font-semibold">{p.name}</div>
+                  <div className="font-mono text-[11px] text-zinc-400 flex gap-3">
                     <span>KEY:{p.key_signature}</span>
                     <span>BPM:{p.tempo_bpm}</span>
                   </div>
                 </div>
                 <button
                   onClick={() => selectProject(p)}
-                  style={{
-                    padding: '8px 16px',
-                    backgroundColor: 'var(--c-surface)',
-                    border: '1px solid var(--c-border)',
-                    color: 'var(--c-text-1)',
-                    fontFamily: 'var(--font-mono)',
-                    fontSize: '11px',
-                    cursor: 'pointer'
-                  }}
-                  onMouseEnter={e => e.currentTarget.style.backgroundColor = 'var(--c-elevated)'}
-                  onMouseLeave={e => e.currentTarget.style.backgroundColor = 'var(--c-surface)'}
+                  className="px-4 py-2 bg-zinc-800 border border-zinc-700 text-zinc-200 font-mono text-xs rounded transition-all duration-200 hover:bg-zinc-700 active:scale-[0.98]"
                 >
                   OPEN_WORKSPACE
                 </button>
@@ -113,35 +68,20 @@ const ProjectLauncher = () => {
       </div>
 
       {/* Right Column: SYSTEM_CONFIGURATION & CREDENTIALS */}
-      <div style={{
-        flex: 1,
-        display: 'flex',
-        flexDirection: 'column',
-        padding: '32px',
-        gap: '24px',
-        backgroundColor: 'var(--c-base)'
-      }}>
-        <div style={{ fontFamily: 'var(--font-mono)', fontSize: '12px', color: 'var(--c-text-2)', letterSpacing: '0.05em' }}>
+      <div className="flex-1 flex flex-col p-8 gap-6 bg-zinc-950">
+        <div className="font-mono text-xs text-zinc-400 tracking-wider">
           [SYSTEM_CONFIGURATION & CREDENTIALS]
         </div>
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-            <label style={{ fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'var(--c-text-2)' }}>GEMINI_API_KEY</label>
+        <div className="flex flex-col gap-4">
+          <div className="flex flex-col gap-2">
+            <label className="font-mono text-[11px] text-zinc-400">GEMINI_API_KEY</label>
             <input 
               type="password" 
               value={geminiKey} 
               onChange={handleGeminiChange} 
               placeholder="AIzaSy..." 
-              style={{
-                backgroundColor: 'var(--c-input)',
-                border: '1px solid var(--c-border)',
-                color: 'var(--c-text-1)',
-                padding: '10px 12px',
-                fontFamily: 'var(--font-mono)',
-                fontSize: '12px',
-                outline: 'none'
-              }}
+              className="w-full bg-zinc-900 border border-zinc-800 text-zinc-100 p-3 font-mono text-xs rounded outline-none focus:border-zinc-600 focus:ring-1 focus:ring-zinc-600 transition-all duration-200"
             />
           </div>
         </div>

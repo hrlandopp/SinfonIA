@@ -82,18 +82,18 @@ export default function App() {
 
   if (!isAudioLoaded) {
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', width: '100vw', alignItems: 'center', justifyContent: 'center', backgroundColor: 'var(--c-bg)', color: 'var(--c-text-1)', fontFamily: 'var(--font-ui)' }}>
-        <div className="animate-spin" style={{ marginBottom: '16px', border: '4px solid var(--c-border)', borderTopColor: 'var(--c-text-1)', borderRadius: '50%', width: '40px', height: '40px' }}></div>
-        <h2 style={{ fontSize: '18px', fontWeight: 'bold', marginBottom: '8px' }}>Afinando la Orquesta...</h2>
-        <p style={{ color: 'var(--c-text-2)', fontSize: '14px' }}>Cargando instrumentos en memoria.</p>
+      <div className="flex flex-col h-screen w-screen items-center justify-center bg-zinc-950 text-zinc-100 font-sans">
+        <div className="animate-spin mb-4 border-4 border-zinc-800 border-t-zinc-300 rounded-full w-10 h-10"></div>
+        <h2 className="text-lg font-bold mb-2">Afinando la Orquesta...</h2>
+        <p className="text-zinc-400 text-sm">Cargando instrumentos en memoria.</p>
       </div>
     );
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', width: '100vw', overflow: 'hidden', backgroundColor: 'var(--c-bg)' }}>
+    <div className="flex flex-col h-screen w-screen overflow-hidden bg-zinc-950 text-zinc-100 font-sans">
       <ControlBar />
-      <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
+      <div className="flex flex-1 overflow-hidden">
         <AIManagerPanel />
         <WorkspaceContainer playFretNote={playFretNote} />
       </div>
