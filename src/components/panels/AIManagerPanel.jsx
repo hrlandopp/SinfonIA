@@ -23,12 +23,12 @@ const AIManagerPanel = React.memo(() => {
   const isOrbAlerting = !!mascotAlert;
 
   return (
-    <aside className="w-1/4 max-w-sm bg-zinc-950 flex flex-col overflow-hidden flex-shrink-0 z-20 shadow-2xl shadow-black/80 border-r border-zinc-800">
+    <aside className="w-1/4 max-w-sm bg-black/40 backdrop-blur-xl flex flex-col overflow-hidden flex-shrink-0 z-20 shadow-[inset_-1px_0_0_rgba(255,255,255,0.1)] border-r border-white/10">
       
       {/* HEADER GLOBAl & EL ORBE */}
-      <div className="p-4 bg-zinc-900 border-b border-zinc-800/80 flex items-center justify-between">
+      <div className="p-4 bg-black/40 backdrop-blur-md border-b border-white/10 flex items-center justify-between shadow-inner">
         <div className="flex items-center gap-2">
-          <Cpu className="text-indigo-400" size={16} />
+          <Cpu className="text-emerald-400" size={16} />
           <h2 className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">
             SISTEMA DUAL DE AGENTES
           </h2>
@@ -38,11 +38,11 @@ const AIManagerPanel = React.memo(() => {
         <div className="flex items-center justify-center relative w-6 h-6" title={isOrbAlerting ? "Anomalía Detectada" : "Escucha Activa - Modo Pacífico"}>
           {isOrbAlerting ? (
             <>
-              <div className="absolute inset-0 rounded-full bg-red-500/20 animate-ping duration-75" />
-              <div className="w-3 h-3 rounded-full bg-red-500 shadow-[0_0_15px_rgba(239,68,68,0.8)] animate-pulse" />
+              <div className="absolute inset-0 rounded-full bg-red-500/30 animate-ping duration-75" />
+              <div className="w-3 h-3 rounded-full bg-red-500 shadow-[0_0_20px_rgba(239,68,68,1)] animate-pulse" />
             </>
           ) : (
-            <div className={`w-3 h-3 rounded-full bg-white/80 animate-pulse duration-1000 shadow-[0_0_15px_rgba(255,255,255,0.1)] ${activeNoteEdit ? 'bg-indigo-300 shadow-[0_0_15px_rgba(165,180,252,0.4)] scale-110 transition-transform' : ''}`} />
+            <div className={`w-3 h-3 rounded-full bg-emerald-400/80 animate-pulse duration-1000 shadow-[0_0_15px_rgba(16,185,129,0.5)] ${activeNoteEdit ? 'bg-emerald-300 shadow-[0_0_25px_rgba(16,185,129,0.8)] scale-125 transition-transform' : ''}`} />
           )}
         </div>
       </div>
@@ -50,10 +50,10 @@ const AIManagerPanel = React.memo(() => {
       <div className="flex-1 flex flex-col p-4 gap-6 overflow-hidden">
         
         {/* 1. MACRO PRODUCER (Chat Generativo) */}
-        <div className="flex-1 flex flex-col bg-zinc-950 border border-zinc-800/80 rounded-xl overflow-hidden shadow-lg relative">
+        <div className="flex-1 flex flex-col bg-black/40 backdrop-blur-sm border border-white/10 rounded-xl overflow-hidden shadow-[0_4px_20px_rgba(0,0,0,0.3)] relative">
           
           {/* Header */}
-          <div className="px-3 py-2 bg-zinc-900/50 border-b border-zinc-800/50 flex items-center gap-2">
+          <div className="px-3 py-2 bg-black/40 border-b border-white/10 flex items-center gap-2">
             <Terminal className="text-emerald-400" size={14} />
             <span className="text-[10px] text-zinc-500 font-mono uppercase tracking-widest font-bold">
               Macro_Productor_CLI
@@ -66,11 +66,11 @@ const AIManagerPanel = React.memo(() => {
               const isUser = msg.sender === 'user';
               const isSystem = msg.sender === 'system';
               return (
-                <div key={i} className={`flex flex-col ${isSystem ? 'text-indigo-400' : (isUser ? 'text-zinc-300' : 'text-emerald-400')}`}>
+                <div key={i} className={`flex flex-col ${isSystem ? 'text-emerald-300' : (isUser ? 'text-zinc-300' : 'text-emerald-400')}`}>
                   <span className="text-zinc-600 mb-0.5 text-[9px] uppercase tracking-wider">
                     {msg.sender === 'assistant' ? 'Cerebro_IA' : msg.sender}
                   </span>
-                  <div className={`p-2 rounded-md ${isUser ? 'bg-zinc-900 border border-zinc-800' : (isSystem ? 'bg-indigo-500/10 border border-indigo-500/20' : 'bg-emerald-500/5 border border-emerald-500/20')}`}>
+                  <div className={`p-2 rounded-md backdrop-blur-md ${isUser ? 'bg-white/5 border border-white/10' : (isSystem ? 'bg-emerald-500/20 border border-emerald-500/30 shadow-[0_0_10px_rgba(16,185,129,0.1)]' : 'bg-emerald-500/10 border border-emerald-500/20 shadow-[0_0_10px_rgba(16,185,129,0.1)]')}`}>
                     {msg.message}
                   </div>
                 </div>
@@ -89,7 +89,7 @@ const AIManagerPanel = React.memo(() => {
           </div>
 
           {/* Consola Input */}
-          <div className="p-2 border-t border-zinc-800/80 bg-zinc-900/30 flex gap-2 items-end">
+          <div className="p-2 border-t border-white/10 bg-black/40 backdrop-blur-md flex gap-2 items-end">
             <textarea 
               value={chatInput}
               onChange={(e) => setChatInput(e.target.value)}
@@ -102,7 +102,7 @@ const AIManagerPanel = React.memo(() => {
               }}
               placeholder="Ej. 'Crea un verso nostálgico a 80BPM...'"
               rows={2}
-              className="flex-1 bg-zinc-950 border border-zinc-800 rounded-lg text-zinc-300 p-2 font-mono text-[11px] outline-none focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/50 resize-none scrollbar-thin transition-all placeholder:text-zinc-700"
+              className="flex-1 bg-black/40 border border-white/10 rounded-lg text-zinc-300 p-2 font-mono text-[11px] outline-none focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/50 focus:shadow-[0_0_15px_rgba(16,185,129,0.2)] resize-none scrollbar-thin transition-all placeholder:text-zinc-600"
             />
             <button 
               onClick={() => {
@@ -110,7 +110,7 @@ const AIManagerPanel = React.memo(() => {
                 setChatInput('');
               }}
               disabled={isLoadingAi || !chatInput.trim()}
-              className="h-10 w-10 flex flex-shrink-0 items-center justify-center bg-zinc-800 hover:bg-emerald-600 hover:text-white text-emerald-400 border border-zinc-700 hover:border-emerald-500 rounded-lg transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="h-10 w-10 flex flex-shrink-0 items-center justify-center bg-emerald-500/20 hover:bg-emerald-500 hover:text-zinc-950 text-emerald-400 border border-emerald-500/50 rounded-lg transition-all duration-300 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed hover:shadow-[0_0_15px_rgba(16,185,129,0.4)]"
             >
               <Send size={16} className="ml-1" />
             </button>
@@ -118,16 +118,16 @@ const AIManagerPanel = React.memo(() => {
         </div>
 
         {/* 2. MICRO MASCOT (Analizador Armónico Contextual) */}
-        <div className="h-1/3 flex flex-col bg-zinc-950 border border-zinc-800/80 rounded-xl overflow-hidden shadow-lg relative">
+        <div className="h-1/3 flex flex-col bg-black/40 backdrop-blur-sm border border-white/10 rounded-xl overflow-hidden shadow-[0_4px_20px_rgba(0,0,0,0.3)] relative">
           
-          <div className="px-3 py-3 bg-zinc-900/50 border-b border-zinc-800/50 flex items-center gap-2">
+          <div className="px-3 py-3 bg-black/40 border-b border-white/10 flex items-center gap-2">
              <AlertTriangle className={mascotAlert ? "text-amber-500" : "text-zinc-500"} size={14} />
             <span className="text-[10px] text-zinc-400 font-mono uppercase tracking-widest font-bold">
               Analizador_Armónico
             </span>
           </div>
 
-          <div className="p-3 border-b border-zinc-800/30 bg-zinc-900/20">
+          <div className="p-3 border-b border-white/5 bg-white/5 backdrop-blur-sm">
             {mascotAlert ? (
               <div className="flex flex-col gap-2">
                 <div className="flex items-center gap-2 text-red-400 font-mono text-[10px] font-bold animate-pulse">
@@ -157,7 +157,7 @@ const AIManagerPanel = React.memo(() => {
                 <span className="text-zinc-600 mb-0.5 text-[9px] uppercase tracking-wider">
                    {msg.sender === 'user' ? 'Trigger' : 'Orbe_IA'}
                 </span>
-                <div className={`p-2 rounded-md ${msg.sender === 'user' ? 'bg-zinc-900 border border-zinc-800 text-zinc-300' : 'bg-indigo-500/10 border border-indigo-500/20 text-indigo-300'}`}>
+                <div className={`p-2 rounded-md backdrop-blur-md ${msg.sender === 'user' ? 'bg-white/5 border border-white/10 text-zinc-300' : 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 shadow-[0_0_10px_rgba(16,185,129,0.1)]'}`}>
                   {msg.message}
                 </div>
               </div>

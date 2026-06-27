@@ -43,7 +43,7 @@ export default function GuitarChordDiagram({ chordName }) {
   const data = CHORD_DATA[chordName]
   if (!data) {
     return (
-      <div style={{ padding: '20px', textAlign: 'center', fontSize: '11px', color: 'var(--c-text-3)', border: '1px dashed var(--c-border)', borderRadius: 'var(--r-sm)' }}>
+      <div className="flex-1 flex flex-col items-center justify-center border border-dashed border-white/10 rounded-xl p-4 text-[10px] text-zinc-500 font-mono text-center">
         Diagrama no<br/>disponible
       </div>
     )
@@ -61,30 +61,30 @@ export default function GuitarChordDiagram({ chordName }) {
   const fretSpacing = (height - marginY - 20) / 4
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', background: 'var(--c-base)', border: '1px solid var(--c-border)', borderRadius: 'var(--r-md)', padding: '10px 0' }}>
+    <div className="flex flex-col items-center justify-center p-4">
       <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`}>
         {/* Título del acorde */}
-        <text x={width / 2} y={15} fontSize="14" fontWeight="bold" fill="var(--c-text-1)" textAnchor="middle">
+        <text x={width / 2} y={15} fontSize="14" fontWeight="bold" fill="#e4e4e7" textAnchor="middle">
           {chordName}
         </text>
 
         {/* Traste Base o Cejilla de la guitarra (Nut) */}
         {baseFret === 1 ? (
-          <line x1={marginX} y1={marginY} x2={width - marginX} y2={marginY} stroke="var(--c-text-1)" strokeWidth="4" />
+          <line x1={marginX} y1={marginY} x2={width - marginX} y2={marginY} stroke="#e4e4e7" strokeWidth="4" />
         ) : (
-          <text x={marginX - 15} y={marginY + 12} fontSize="11" fill="var(--c-text-2)" textAnchor="middle">
+          <text x={marginX - 15} y={marginY + 12} fontSize="11" fill="#71717a" textAnchor="middle" fontWeight="bold">
             {baseFret}
           </text>
         )}
 
         {/* Cuerdas (Líneas verticales) */}
         {strings.map(i => (
-          <line key={`string-${i}`} x1={marginX + i * stringSpacing} y1={marginY} x2={marginX + i * stringSpacing} y2={height - 20} stroke="var(--c-border-2)" strokeWidth="1.5" />
+          <line key={`string-${i}`} x1={marginX + i * stringSpacing} y1={marginY} x2={marginX + i * stringSpacing} y2={height - 20} stroke="rgba(255,255,255,0.15)" strokeWidth="1.5" />
         ))}
 
         {/* Trastes (Líneas horizontales) */}
         {frets.map(i => (
-          <line key={`fret-${i}`} x1={marginX} y1={marginY + i * fretSpacing} x2={width - marginX} y2={marginY + i * fretSpacing} stroke="var(--c-border-2)" strokeWidth="1.5" />
+          <line key={`fret-${i}`} x1={marginX} y1={marginY + i * fretSpacing} x2={width - marginX} y2={marginY + i * fretSpacing} stroke="rgba(255,255,255,0.15)" strokeWidth="1.5" />
         ))}
 
         {/* Indicadores X y O (Cuerdas abiertas o silenciadas) */}
@@ -93,11 +93,11 @@ export default function GuitarChordDiagram({ chordName }) {
           const y = marginY - 10
           if (fret === -1) {
             return (
-              <text key={`x-${stringIdx}`} x={x} y={y} fontSize="10" fill="var(--c-danger)" textAnchor="middle" fontWeight="bold">X</text>
+              <text key={`x-${stringIdx}`} x={x} y={y} fontSize="10" fill="#ef4444" textAnchor="middle" fontWeight="bold">X</text>
             )
           } else if (fret === 0) {
             return (
-              <circle key={`o-${stringIdx}`} cx={x} cy={y - 3} r="3" fill="transparent" stroke="var(--c-ok)" strokeWidth="1.5" />
+              <circle key={`o-${stringIdx}`} cx={x} cy={y - 3} r="3" fill="transparent" stroke="#10b981" strokeWidth="1.5" />
             )
           }
           return null
@@ -116,9 +116,9 @@ export default function GuitarChordDiagram({ chordName }) {
 
           return (
             <g key={`dot-${stringIdx}`}>
-              <circle cx={x} cy={y} r="6" fill="var(--teal)" />
+              <circle cx={x} cy={y} r="6" fill="#10b981" />
               {finger > 0 && (
-                <text x={x} y={y + 3} fontSize="8" fill="#fff" textAnchor="middle" fontWeight="bold">{finger}</text>
+                <text x={x} y={y + 3} fontSize="8" fill="#09090b" textAnchor="middle" fontWeight="bold">{finger}</text>
               )}
             </g>
           )

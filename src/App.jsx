@@ -9,6 +9,7 @@ import ControlBar from './components/layout/ControlBar'
 import AIManagerPanel from './components/panels/AIManagerPanel'
 import WorkspaceContainer from './components/layout/WorkspaceContainer'
 import ProjectLauncher from './components/project/ProjectLauncher'
+import FloatingMascot from './components/ui/FloatingMascot'
 
 import { useProjectStore } from './store/useProjectStore'
 import { useUIStore } from './store/useUIStore'
@@ -23,8 +24,6 @@ export default function App() {
 
   const [currentChord, setCurrentChord] = useState('')
   const [currentChordIdx, setCurrentChordIdx] = useState(0)
-
-
 
   const handleBeatTick = useCallback((beat) => {
     const sec = sections.find(s => s.id === activeSectionId);
@@ -97,6 +96,7 @@ export default function App() {
         <AIManagerPanel />
         <WorkspaceContainer playFretNote={playFretNote} />
       </div>
+      <FloatingMascot />
     </div>
   );
 }

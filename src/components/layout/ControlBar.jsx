@@ -29,7 +29,7 @@ const ControlBar = () => {
   };
 
   return (
-    <div className="h-[60px] flex items-center justify-between px-6 bg-zinc-950 border-b border-zinc-800/80 text-zinc-100 flex-shrink-0 z-30 shadow-sm shadow-black/20">
+    <div className="h-[60px] flex items-center justify-between px-6 bg-zinc-950/70 backdrop-blur-md border-b border-white/10 text-zinc-100 flex-shrink-0 z-30 shadow-[0_4px_20px_rgba(0,0,0,0.5)]">
       
       {/* Metadata Section */}
       <div className="flex items-center gap-6">
@@ -39,11 +39,11 @@ const ControlBar = () => {
         
         {/* Barra Paramétrica */}
         <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2 bg-zinc-900 border border-zinc-800/80 rounded-md px-3 py-1.5 shadow-inner shadow-black/40">
+          <div className="flex items-center gap-2 bg-black/40 backdrop-blur-sm border border-white/10 rounded-md px-3 py-1.5 shadow-inner shadow-black/40">
             <span className="text-[10px] font-mono text-zinc-500 uppercase tracking-wider">BPM</span>
-            <span className="text-xs font-mono font-medium text-zinc-200">{project?.tempo_bpm || 120}</span>
+            <span className="text-xs font-mono font-medium text-emerald-400">{project?.tempo_bpm || 120}</span>
           </div>
-          <div className="flex items-center gap-2 bg-zinc-900 border border-zinc-800/80 rounded-md px-3 py-1.5 shadow-inner shadow-black/40">
+          <div className="flex items-center gap-2 bg-black/40 backdrop-blur-sm border border-white/10 rounded-md px-3 py-1.5 shadow-inner shadow-black/40">
             <span className="text-[10px] font-mono text-zinc-500 uppercase tracking-wider">KEY</span>
             <span className="text-xs font-mono font-medium text-zinc-200">{project?.key_signature || 'C'}</span>
           </div>
@@ -61,7 +61,7 @@ const ControlBar = () => {
 
       {/* Transport Controls & History */}
       <div className="flex items-center gap-2">
-        <div className="flex bg-zinc-900/80 border border-zinc-800/80 rounded-md p-0.5">
+        <div className="flex bg-black/40 backdrop-blur-sm border border-white/10 rounded-md p-0.5 shadow-inner">
           <button 
             onClick={() => undo()}
             disabled={pastStates.length === 0}
@@ -85,7 +85,7 @@ const ControlBar = () => {
         <div className="flex items-center gap-1">
           <button 
             onClick={handlePlayToggle}
-            className={`flex items-center justify-center w-10 h-8 rounded-md transition-all active:scale-95 border ${isPlaying ? 'bg-emerald-500/10 border-emerald-500/50 text-emerald-400 shadow-[0_0_15px_rgba(16,185,129,0.2)]' : 'bg-zinc-900 border-zinc-800/80 text-zinc-300 hover:bg-zinc-800 hover:text-white'}`}
+            className={`flex items-center justify-center w-10 h-8 rounded-md transition-all duration-300 active:scale-95 border ${isPlaying ? 'bg-emerald-500/20 border-emerald-500 text-emerald-300 shadow-[0_0_20px_rgba(16,185,129,0.5)] scale-105' : 'bg-black/40 backdrop-blur-sm border-white/10 text-zinc-300 hover:bg-white/5 hover:text-white'}`}
             title="Reproducir/Pausar"
           >
             {isPlaying ? <Pause size={16} className="fill-current" /> : <Play size={16} className="fill-current" />}
@@ -113,12 +113,12 @@ const ControlBar = () => {
       </div>
 
       {/* View Tabs */}
-      <div className="flex bg-zinc-900/50 p-1 rounded-lg border border-zinc-800/50">
+      <div className="flex bg-black/40 backdrop-blur-md p-1 rounded-lg border border-white/10 shadow-inner">
         {['EDITOR', 'MIXER', 'DASHBOARD'].map(tab => (
           <button
             key={tab}
             onClick={() => updateUIFocus({ activeTab: tab.toLowerCase() })}
-            className={`px-4 py-1.5 rounded-md text-[10px] font-bold tracking-widest transition-all ${activeTab === tab.toLowerCase() ? 'bg-zinc-800 text-zinc-100 shadow-sm' : 'text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/50'}`}
+            className={`px-4 py-1.5 rounded-md text-[10px] font-bold tracking-widest transition-all duration-300 ${activeTab === tab.toLowerCase() ? 'bg-emerald-500/20 text-emerald-400 shadow-[0_0_10px_rgba(16,185,129,0.2)]' : 'text-zinc-500 hover:text-zinc-300 hover:bg-white/5'}`}
           >
             {tab}
           </button>
